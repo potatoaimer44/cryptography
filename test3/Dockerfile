@@ -1,7 +1,8 @@
-FROM node:18  # Changed from alpine
+FROM node:18-alpine
 WORKDIR /app
-COPY package*.json ./
+COPY package*.json .
 RUN npm install
 COPY . .
+RUN chmod +x wait-for-it.sh
 EXPOSE 3000
-CMD ["node", "--trace-uncaught", "server.js"]
+CMD ["./wait-for-it.sh", "db:5432", "--", "node", "server.js"]
