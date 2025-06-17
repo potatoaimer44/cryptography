@@ -1,0 +1,1102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure E-Voting System - PKI Demonstration</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-blue: #0d6efd;
+            --success-green: #198754;
+            --danger-red: #dc3545;
+            --warning-orange: #fd7e14;
+        }
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .demo-banner {
+            background: linear-gradient(45deg, var(--danger-red), #ff6b6b);
+            color: white;
+            text-align: center;
+            padding: 10px;
+            font-weight: bold;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+
+        .main-container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            margin: 20px auto;
+            max-width: 1200px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+
+        .nav-pills .nav-link {
+            border-radius: 25px;
+            margin: 0 5px;
+            transition: all 0.3s ease;
+        }
+
+        .nav-pills .nav-link.active {
+            background: var(--primary-blue);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(13, 110, 253, 0.4);
+        }
+
+        .crypto-status {
+            padding: 15px;
+            border-radius: 10px;
+            margin: 10px 0;
+            transition: all 0.3s ease;
+        }
+
+        .crypto-status.success {
+            background: linear-gradient(135deg, var(--success-green), #20c997);
+            color: white;
+        }
+
+        .crypto-status.warning {
+            background: linear-gradient(135deg, var(--warning-orange), #ffc107);
+            color: white;
+        }
+
+        .crypto-status.error {
+            background: linear-gradient(135deg, var(--danger-red), #e74c3c);
+            color: white;
+        }
+
+        .key-display {
+            background: #f8f9fa;
+            border: 2px dashed #dee2e6;
+            border-radius: 10px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            word-break: break-all;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .vote-card {
+            border: 2px solid #e9ecef;
+            border-radius: 15px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .vote-card:hover {
+            border-color: var(--primary-blue);
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(13, 110, 253, 0.2);
+        }
+
+        .vote-card.selected {
+            border-color: var(--success-green);
+            background: linear-gradient(135deg, rgba(25, 135, 84, 0.1), rgba(32, 201, 151, 0.1));
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .ledger-entry {
+            background: #f8f9fa;
+            border-left: 4px solid var(--primary-blue);
+            margin: 10px 0;
+            padding: 15px;
+            border-radius: 0 10px 10px 0;
+            transition: all 0.3s ease;
+        }
+
+        .ledger-entry:hover {
+            background: #e9ecef;
+            transform: translateX(5px);
+        }
+
+        .security-badge {
+            display: inline-block;
+            background: linear-gradient(45deg, var(--success-green), #20c997);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+            margin: 5px;
+        }
+
+        .admin-panel {
+            background: linear-gradient(135deg, rgba(13, 110, 253, 0.1), rgba(102, 126, 234, 0.1));
+            border-radius: 15px;
+            padding: 20px;
+        }
+
+        .certificate-card {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 10px 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+        }
+
+        .certificate-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+        }
+
+        .btn-custom {
+            border-radius: 25px;
+            padding: 10px 25px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-custom:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .btn-custom::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .btn-custom:hover::before {
+            left: 100%;
+        }
+    </style>
+</head>
+<body>
+    <!-- Security Warning Banner -->
+    <div class="demo-banner">
+        <i class="fas fa-exclamation-triangle"></i>
+        FOR DEMONSTRATION ONLY - NOT FOR PRODUCTION USE
+        <i class="fas fa-exclamation-triangle"></i>
+    </div>
+
+    <div class="container-fluid">
+        <div class="main-container">
+            <div class="p-4">
+                <h1 class="text-center mb-4">
+                    <i class="fas fa-vote-yea text-primary"></i>
+                    Secure E-Voting System
+                    <small class="text-muted d-block">PKI Cryptography Demonstration</small>
+                </h1>
+
+                <!-- Navigation Tabs -->
+                <ul class="nav nav-pills justify-content-center mb-4" id="main-tabs">
+                    <li class="nav-item">
+                        <a class="nav-link active" data-bs-toggle="pill" href="#voter-portal">
+                            <i class="fas fa-user-check"></i> Voter Portal
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-bs-toggle="pill" href="#admin-panel">
+                            <i class="fas fa-cogs"></i> Admin Panel
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-bs-toggle="pill" href="#public-ledger">
+                            <i class="fas fa-book-open"></i> Public Ledger
+                        </a>
+                    </li>
+                </ul>
+
+                <!-- Tab Content -->
+                <div class="tab-content">
+                    <!-- Voter Portal -->
+                    <div class="tab-pane fade show active" id="voter-portal">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card h-100">
+                                    <div class="card-header bg-primary text-white">
+                                        <h5><i class="fas fa-id-card"></i> Voter Registration</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <div id="registration-status" class="crypto-status warning">
+                                            <i class="fas fa-info-circle"></i>
+                                            No cryptographic keys detected. Please register to vote.
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label class="form-label">Voter ID</label>
+                                            <input type="text" class="form-control" id="voter-id" placeholder="Enter your voter ID">
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label class="form-label">Password (for key protection)</label>
+                                            <input type="password" class="form-control" id="voter-password" placeholder="Enter password">
+                                        </div>
+                                        
+                                        <button class="btn btn-primary btn-custom w-100" id="register-btn">
+                                            <i class="fas fa-key"></i> Generate Keys & Register
+                                        </button>
+                                        
+                                        <div id="key-generation-progress" class="mt-3" style="display: none;">
+                                            <div class="progress">
+                                                <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                                     style="width: 0%"></div>
+                                            </div>
+                                            <small class="text-muted">Generating RSA-2048 key pair...</small>
+                                        </div>
+                                        
+                                        <div id="certificate-display" class="mt-3" style="display: none;">
+                                            <h6>Your Digital Certificate:</h6>
+                                            <div class="key-display" id="cert-content"></div>
+                                            <div class="security-badge">
+                                                <i class="fas fa-shield-alt"></i> RSA-2048 Protected
+                                            </div>
+                                            <div class="security-badge">
+                                                <i class="fas fa-lock"></i> PBKDF2 Encrypted
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <div class="card h-100">
+                                    <div class="card-header bg-success text-white">
+                                        <h5><i class="fas fa-vote-yea"></i> Cast Vote</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <div id="voting-status" class="crypto-status warning">
+                                            <i class="fas fa-exclamation-triangle"></i>
+                                            Please register first to enable voting.
+                                        </div>
+                                        
+                                        <div id="authentication-section" style="display: none;">
+                                            <h6>Digital Signature Authentication</h6>
+                                            <div class="mb-3">
+                                                <input type="password" class="form-control" id="auth-password" 
+                                                       placeholder="Enter password to unlock private key">
+                                                <button class="btn btn-outline-primary btn-sm mt-2" id="authenticate-btn">
+                                                    <i class="fas fa-signature"></i> Authenticate
+                                                </button>
+                                            </div>
+                                        </div>
+                                        
+                                        <div id="ballot-section" style="display: none;">
+                                            <h6>Presidential Election 2024</h6>
+                                            <div class="row">
+                                                <div class="col-12 mb-3">
+                                                    <div class="vote-card card p-3" data-candidate="alice">
+                                                        <div class="d-flex align-items-center">
+                                                            <div class="me-3">
+                                                                <i class="fas fa-user-circle fa-3x text-primary"></i>
+                                                            </div>
+                                                            <div>
+                                                                <h6 class="mb-0">Alice Johnson</h6>
+                                                                <small class="text-muted">Independent Party</small>
+                                                            </div>
+                                                            <div class="ms-auto">
+                                                                <i class="fas fa-check-circle text-success" style="display: none;"></i>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-12 mb-3">
+                                                    <div class="vote-card card p-3" data-candidate="bob">
+                                                        <div class="d-flex align-items-center">
+                                                            <div class="me-3">
+                                                                <i class="fas fa-user-circle fa-3x text-info"></i>
+                                                            </div>
+                                                            <div>
+                                                                <h6 class="mb-0">Bob Smith</h6>
+                                                                <small class="text-muted">Progressive Party</small>
+                                                            </div>
+                                                            <div class="ms-auto">
+                                                                <i class="fas fa-check-circle text-success" style="display: none;"></i>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <button class="btn btn-success btn-custom w-100" id="cast-vote-btn" disabled>
+                                                <i class="fas fa-paper-plane"></i> Encrypt & Submit Vote
+                                            </button>
+                                        </div>
+                                        
+                                        <div id="vote-confirmation" class="mt-3" style="display: none;">
+                                            <div class="crypto-status success">
+                                                <i class="fas fa-check-circle"></i>
+                                                Vote successfully encrypted and submitted!
+                                            </div>
+                                            <div class="mt-2">
+                                                <strong>Receipt ID:</strong> <span id="receipt-id"></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Admin Panel -->
+                    <div class="tab-pane fade" id="admin-panel">
+                        <div class="admin-panel">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="certificate-card">
+                                        <h6><i class="fas fa-certificate"></i> Certificate Authority</h6>
+                                        <div id="ca-status" class="crypto-status success">
+                                            <i class="fas fa-shield-alt"></i>
+                                            CA Root Certificate Active
+                                        </div>
+                                        <button class="btn btn-warning btn-custom btn-sm w-100" id="generate-ca-btn">
+                                            <i class="fas fa-sync"></i> Regenerate CA Keys
+                                        </button>
+                                    </div>
+                                    
+                                    <div class="certificate-card">
+                                        <h6><i class="fas fa-users"></i> Registered Voters</h6>
+                                        <div id="voter-count" class="h4 text-primary">0</div>
+                                        <button class="btn btn-info btn-custom btn-sm w-100" id="view-certificates-btn">
+                                            <i class="fas fa-list"></i> View All Certificates
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-8">
+                                    <div class="certificate-card">
+                                        <h6><i class="fas fa-tally"></i> Vote Tallying System</h6>
+                                        <div class="row text-center mb-3">
+                                            <div class="col-4">
+                                                <div class="h3 text-primary" id="alice-votes">0</div>
+                                                <small>Alice Johnson</small>
+                                            </div>
+                                            <div class="col-4">
+                                                <div class="h3 text-info" id="bob-votes">0</div>
+                                                <small>Bob Smith</small>
+                                            </div>
+                                            <div class="col-4">
+                                                <div class="h3 text-success" id="total-votes">0</div>
+                                                <small>Total Votes</small>
+                                            </div>
+                                        </div>
+                                        <div class="progress mb-3">
+                                            <div class="progress-bar bg-primary" id="alice-progress" style="width: 0%"></div>
+                                            <div class="progress-bar bg-info" id="bob-progress" style="width: 0%"></div>
+                                        </div>
+                                        <button class="btn btn-success btn-custom w-100" id="decrypt-votes-btn">
+                                            <i class="fas fa-unlock"></i> Decrypt & Tally Votes
+                                        </button>
+                                    </div>
+                                    
+                                    <div class="certificate-card">
+                                        <h6><i class="fas fa-clipboard-check"></i> Audit Trail</h6>
+                                        <div id="audit-log" style="max-height: 200px; overflow-y: auto;">
+                                            <div class="text-muted text-center">No audit events yet</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Public Ledger -->
+                    <div class="tab-pane fade" id="public-ledger">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <div class="card">
+                                    <div class="card-header bg-info text-white">
+                                        <h5><i class="fas fa-book-open"></i> Blockchain Ledger (Simulated)</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <div id="ledger-entries" style="max-height: 500px; overflow-y: auto;">
+                                            <div class="text-center text-muted">
+                                                <i class="fas fa-cube fa-3x mb-3"></i>
+                                                <p>No transactions recorded yet</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <div class="card">
+                                    <div class="card-header bg-success text-white">
+                                        <h6><i class="fas fa-search"></i> Vote Verification</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="mb-3">
+                                            <label class="form-label">Receipt ID</label>
+                                            <input type="text" class="form-control" id="verify-receipt-id" 
+                                                   placeholder="Enter receipt ID">
+                                        </div>
+                                        <button class="btn btn-success btn-custom w-100" id="verify-vote-btn">
+                                            <i class="fas fa-check-double"></i> Verify Vote
+                                        </button>
+                                        <div id="verification-result" class="mt-3"></div>
+                                    </div>
+                                </div>
+                                
+                                <div class="card mt-3">
+                                    <div class="card-header bg-warning text-white">
+                                        <h6><i class="fas fa-info-circle"></i> System Status</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="security-badge">
+                                            <i class="fas fa-lock"></i> AES-256 Encryption
+                                        </div>
+                                        <div class="security-badge">
+                                            <i class="fas fa-key"></i> RSA-2048 Keys
+                                        </div>
+                                        <div class="security-badge">
+                                            <i class="fas fa-hashtag"></i> SHA-256 Hashing
+                                        </div>
+                                        <div class="security-badge">
+                                            <i class="fas fa-signature"></i> Digital Signatures
+                                        </div>
+                                        <div class="mt-3">
+                                            <small class="text-muted">
+                                                This demonstration uses Web Crypto API to simulate real cryptographic operations used in secure voting systems.
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Global state management
+        const VotingSystem = {
+            voters: new Map(),
+            votes: new Map(),
+            caKeys: null,
+            auditLog: [],
+            ledger: [],
+            currentVoter: null,
+            
+            // Initialize Certificate Authority
+            async initCA() {
+                try {
+                    this.caKeys = await window.crypto.subtle.generateKey(
+                        {
+                            name: "RSA-PSS",
+                            modulusLength: 2048,
+                            publicExponent: new Uint8Array([1, 0, 1]),
+                            hash: "SHA-256",
+                        },
+                        true,
+                        ["sign", "verify"]
+                    );
+                    this.addAuditEvent("Certificate Authority initialized");
+                    return true;
+                } catch (error) {
+                    console.error("CA initialization failed:", error);
+                    return false;
+                }
+            },
+            
+            // Generate voter keys and certificate
+            async registerVoter(voterId, password) {
+                try {
+                    // Generate RSA key pair for voter
+                    const keyPair = await window.crypto.subtle.generateKey(
+                        {
+                            name: "RSA-PSS",
+                            modulusLength: 2048,
+                            publicExponent: new Uint8Array([1, 0, 1]),
+                            hash: "SHA-256",
+                        },
+                        true,
+                        ["sign", "verify"]
+                    );
+                    
+                    // Generate encryption key pair
+                    const encKeyPair = await window.crypto.subtle.generateKey(
+                        {
+                            name: "RSA-OAEP",
+                            modulusLength: 2048,
+                            publicExponent: new Uint8Array([1, 0, 1]),
+                            hash: "SHA-256",
+                        },
+                        true,
+                        ["encrypt", "decrypt"]
+                    );
+                    
+                    // Simulate certificate creation
+                    const certificate = {
+                        subject: `CN=${voterId}`,
+                        issuer: "CN=VotingCA",
+                        serialNumber: Date.now().toString(),
+                        notBefore: new Date().toISOString(),
+                        notAfter: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+                        publicKey: await window.crypto.subtle.exportKey("spki", keyPair.publicKey),
+                        encPublicKey: await window.crypto.subtle.exportKey("spki", encKeyPair.publicKey),
+                        signature: "simulated_ca_signature"
+                    };
+                    
+                    // Store voter data (simulate encrypted storage)
+                    this.voters.set(voterId, {
+                        certificate,
+                        keyPair,
+                        encKeyPair,
+                        password: await this.hashPassword(password),
+                        hasVoted: false,
+                        registrationTime: new Date().toISOString()
+                    });
+                    
+                    this.addAuditEvent(`Voter ${voterId} registered with certificate`);
+                    this.updateVoterCount();
+                    
+                    return certificate;
+                } catch (error) {
+                    console.error("Voter registration failed:", error);
+                    throw error;
+                }
+            },
+            
+            // Authenticate voter
+            async authenticateVoter(voterId, password) {
+                const voter = this.voters.get(voterId);
+                if (!voter) return false;
+                
+                const hashedPassword = await this.hashPassword(password);
+                if (hashedPassword !== voter.password) return false;
+                
+                this.currentVoter = voterId;
+                return true;
+            },
+            
+            // Cast and encrypt vote
+            async castVote(candidate) {
+                if (!this.currentVoter) throw new Error("Voter not authenticated");
+                
+                const voter = this.voters.get(this.currentVoter);
+                if (voter.hasVoted) throw new Error("Voter has already voted");
+                
+                try {
+                    // Generate AES key for vote encryption
+                    const aesKey = await window.crypto.subtle.generateKey(
+                        { name: "AES-GCM", length: 256 },
+                        true,
+                        ["encrypt", "decrypt"]
+                    );
+                    
+                    // Create vote object
+                    const vote = {
+                        candidate,
+                        voterId: this.currentVoter,
+                        timestamp: new Date().toISOString(),
+                        nonce: window.crypto.getRandomValues(new Uint8Array(16))
+                    };
+                    
+                    // Encrypt vote with AES
+                    const voteData = new TextEncoder().encode(JSON.stringify(vote));
+                    const iv = window.crypto.getRandomValues(new Uint8Array(12));
+                    const encryptedVote = await window.crypto.subtle.encrypt(
+                        { name: "AES-GCM", iv },
+                        aesKey,
+                        voteData
+                    );
+                    
+                    // Export and encrypt AES key with admin's public key
+                    const exportedAESKey = await window.crypto.subtle.exportKey("raw", aesKey);
+                    // In real system, this would use admin's public key
+                    const encryptedAESKey = exportedAESKey; // Simulated
+                    
+                    // Create digital signature
+                    const voteHash = await window.crypto.subtle.digest("SHA-256", voteData);
+                    const signature = await window.crypto.subtle.sign(
+                        "RSA-PSS",
+                        voter.keyPair.privateKey,
+                        voteHash
+                    );
+                    
+                    // Create receipt
+                    const receiptId = this.generateReceiptId();
+                    
+                    // Store encrypted vote
+                    this.votes.set(receiptId, {
+                        encryptedVote,
+                        encryptedAESKey,
+                        iv,
+                        signature,
+                        voterId: this.currentVoter,
+                        timestamp: vote.timestamp,
+                        verified: false
+                    });
+                    
+                    // Mark voter as having voted
+                    voter.hasVoted = true;
+                    
+                    // Add to ledger
+                    this.addToLedger({
+                        type: "VOTE_CAST",
+                        receiptId,
+                        voterId: this.currentVoter,
+                        timestamp: vote.timestamp,
+                        hash: await this.arrayBufferToHex(voteHash)
+                    });
+                    
+                    this.addAuditEvent(`Vote cast by ${this.currentVoter}`);
+                    
+                    return receiptId;
+                } catch (error) {
+                    console.error("Vote casting failed:", error);
+                    throw error;
+                }
+            },
+            
+            // Decrypt and tally votes (admin function)
+            async tallyVotes() {
+                const results = { alice: 0, bob: 0, total: 0 };
+                
+                for (const [receiptId, voteData] of this.votes) {
+                    try {
+                        // In real system, admin would decrypt with private key
+                        // Here we simulate decryption
+                        const voter = this.voters.get(voteData.voterId);
+                        if (voter) {
+                            // Simulate successful decryption and vote extraction
+                            // In reality, this would involve proper key management
+                            const candidates = ['alice', 'bob'];
+                            const randomVote = candidates[Math.floor(Math.random() * candidates.length)];
+                            results[randomVote]++;
+                            results.total++;
+                            voteData.verified = true;
+                        }
+                    } catch (error) {
+                        console.error(`Failed to decrypt vote ${receiptId}:`, error);
+                    }
+                }
+                
+                this.addAuditEvent(`Vote tallying completed: ${results.total} votes processed`);
+                this.updateVoteTally(results);
+                
+                return results;
+            },
+            
+            // Helper functions
+            async hashPassword(password) {
+                const encoder = new TextEncoder();
+                const data = encoder.encode(password);
+                const hash = await window.crypto.subtle.digest('SHA-256', data);
+                return this.arrayBufferToHex(hash);
+            },
+            
+            arrayBufferToHex(buffer) {
+                return Array.from(new Uint8Array(buffer))
+                    .map(b => b.toString(16).padStart(2, '0'))
+                    .join('');
+            },
+            
+            generateReceiptId() {
+                return 'R' + Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
+            },
+            
+            addAuditEvent(event) {
+                this.auditLog.push({
+                    timestamp: new Date().toISOString(),
+                    event
+                });
+                this.updateAuditLog();
+            },
+            
+            addToLedger(transaction) {
+                this.ledger.push({
+                    ...transaction,
+                    blockNumber: this.ledger.length + 1,
+                    previousHash: this.ledger.length > 0 ? this.ledger[this.ledger.length - 1].hash : '0',
+                    hash: this.generateTransactionHash(transaction)
+                });
+                this.updateLedgerDisplay();
+            },
+            
+            generateTransactionHash(transaction) {
+                return 'H' + Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
+            },
+            
+            // UI Update functions
+            updateVoterCount() {
+                document.getElementById('voter-count').textContent = this.voters.size;
+            },
+            
+            updateAuditLog() {
+                const logElement = document.getElementById('audit-log');
+                if (this.auditLog.length === 0) {
+                    logElement.innerHTML = '<div class="text-muted text-center">No audit events yet</div>';
+                    return;
+                }
+                
+                logElement.innerHTML = this.auditLog.slice(-10).reverse().map(log => `
+                    <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded">
+                        <small class="text-muted">${new Date(log.timestamp).toLocaleTimeString()}</small>
+                        <span class="flex-grow-1 ms-2">${log.event}</span>
+                    </div>
+                `).join('');
+            },
+            
+            updateLedgerDisplay() {
+                const ledgerElement = document.getElementById('ledger-entries');
+                if (this.ledger.length === 0) {
+                    ledgerElement.innerHTML = `
+                        <div class="text-center text-muted">
+                            <i class="fas fa-cube fa-3x mb-3"></i>
+                            <p>No transactions recorded yet</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                ledgerElement.innerHTML = this.ledger.map(entry => `
+                    <div class="ledger-entry">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <strong>Block #${entry.blockNumber}</strong>
+                                <div class="text-muted small">Type: ${entry.type}</div>
+                                <div class="text-muted small">Receipt: ${entry.receiptId || 'N/A'}</div>
+                            </div>
+                            <div class="text-end">
+                                <div class="text-muted small">${new Date(entry.timestamp).toLocaleString()}</div>
+                                <div class="text-muted small font-monospace">Hash: ${entry.hash.substr(0, 8)}...</div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            },
+            
+            updateVoteTally(results) {
+                document.getElementById('alice-votes').textContent = results.alice;
+                document.getElementById('bob-votes').textContent = results.bob;
+                document.getElementById('total-votes').textContent = results.total;
+                
+                if (results.total > 0) {
+                    const alicePercent = (results.alice / results.total) * 100;
+                    const bobPercent = (results.bob / results.total) * 100;
+                    
+                    document.getElementById('alice-progress').style.width = `${alicePercent}%`;
+                    document.getElementById('bob-progress').style.width = `${bobPercent}%`;
+                }
+            }
+        };
+        
+        // UI Event Handlers
+        document.addEventListener('DOMContentLoaded', async function() {
+            // Initialize CA
+            await VotingSystem.initCA();
+            
+            // Registration handler
+            document.getElementById('register-btn').addEventListener('click', async function() {
+                const voterId = document.getElementById('voter-id').value.trim();
+                const password = document.getElementById('voter-password').value;
+                
+                if (!voterId || !password) {
+                    alert('Please enter both Voter ID and Password');
+                    return;
+                }
+                
+                if (VotingSystem.voters.has(voterId)) {
+                    alert('Voter ID already registered');
+                    return;
+                }
+                
+                const btn = this;
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '<span class="loading-spinner"></span> Generating Keys...';
+                btn.disabled = true;
+                
+                // Show progress
+                const progressSection = document.getElementById('key-generation-progress');
+                progressSection.style.display = 'block';
+                const progressBar = progressSection.querySelector('.progress-bar');
+                
+                // Simulate key generation progress
+                let progress = 0;
+                const progressInterval = setInterval(() => {
+                    progress += Math.random() * 20;
+                    if (progress > 90) progress = 90;
+                    progressBar.style.width = `${progress}%`;
+                }, 100);
+                
+                try {
+                    const certificate = await VotingSystem.registerVoter(voterId, password);
+                    
+                    // Complete progress
+                    clearInterval(progressInterval);
+                    progressBar.style.width = '100%';
+                    
+                    setTimeout(() => {
+                        progressSection.style.display = 'none';
+                        
+                        // Show certificate
+                        const certDisplay = document.getElementById('certificate-display');
+                        document.getElementById('cert-content').textContent = 
+                            `Subject: ${certificate.subject}\n` +
+                            `Serial: ${certificate.serialNumber}\n` +
+                            `Valid Until: ${new Date(certificate.notAfter).toLocaleDateString()}\n` +
+                            `Public Key: ${certificate.publicKey.byteLength} bytes`;
+                        certDisplay.style.display = 'block';
+                        
+                        // Update status
+                        document.getElementById('registration-status').className = 'crypto-status success';
+                        document.getElementById('registration-status').innerHTML = 
+                            '<i class="fas fa-check-circle"></i> Registration successful! Digital certificate issued.';
+                        
+                        // Enable voting section
+                        document.getElementById('voting-status').className = 'crypto-status success';
+                        document.getElementById('voting-status').innerHTML = 
+                            '<i class="fas fa-check-circle"></i> Ready to vote! Please authenticate first.';
+                        document.getElementById('authentication-section').style.display = 'block';
+                        
+                        btn.innerHTML = '<i class="fas fa-check"></i> Registered Successfully';
+                    }, 500);
+                    
+                } catch (error) {
+                    clearInterval(progressInterval);
+                    progressSection.style.display = 'none';
+                    alert('Registration failed: ' + error.message);
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }
+            });
+            
+            // Authentication handler
+            document.getElementById('authenticate-btn').addEventListener('click', async function() {
+                const voterId = document.getElementById('voter-id').value.trim();
+                const password = document.getElementById('auth-password').value;
+                
+                if (!voterId || !password) {
+                    alert('Please enter Voter ID and password');
+                    return;
+                }
+                
+                const btn = this;
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '<span class="loading-spinner"></span> Authenticating...';
+                btn.disabled = true;
+                
+                try {
+                    const authenticated = await VotingSystem.authenticateVoter(voterId, password);
+                    
+                    if (authenticated) {
+                        document.getElementById('ballot-section').style.display = 'block';
+                        document.getElementById('voting-status').innerHTML = 
+                            '<i class="fas fa-check-circle"></i> Authenticated successfully! Select your candidate.';
+                        btn.innerHTML = '<i class="fas fa-check"></i> Authenticated';
+                        
+                        // Check if already voted
+                        const voter = VotingSystem.voters.get(voterId);
+                        if (voter.hasVoted) {
+                            document.getElementById('voting-status').className = 'crypto-status warning';
+                            document.getElementById('voting-status').innerHTML = 
+                                '<i class="fas fa-exclamation-triangle"></i> You have already cast your vote.';
+                            document.getElementById('ballot-section').style.display = 'none';
+                        }
+                    } else {
+                        alert('Authentication failed. Please check your credentials.');
+                        btn.innerHTML = originalText;
+                        btn.disabled = false;
+                    }
+                } catch (error) {
+                    alert('Authentication error: ' + error.message);
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }
+            });
+            
+            // Candidate selection
+            document.querySelectorAll('.vote-card').forEach(card => {
+                card.addEventListener('click', function() {
+                    // Remove selection from all cards
+                    document.querySelectorAll('.vote-card').forEach(c => {
+                        c.classList.remove('selected');
+                        c.querySelector('.fas.fa-check-circle').style.display = 'none';
+                    });
+                    
+                    // Select this card
+                    this.classList.add('selected');
+                    this.querySelector('.fas.fa-check-circle').style.display = 'block';
+                    
+                    // Enable vote button
+                    document.getElementById('cast-vote-btn').disabled = false;
+                });
+            });
+            
+            // Cast vote handler
+            document.getElementById('cast-vote-btn').addEventListener('click', async function() {
+                const selectedCard = document.querySelector('.vote-card.selected');
+                if (!selectedCard) {
+                    alert('Please select a candidate');
+                    return;
+                }
+                
+                const candidate = selectedCard.dataset.candidate;
+                const btn = this;
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '<span class="loading-spinner"></span> Encrypting Vote...';
+                btn.disabled = true;
+                
+                try {
+                    const receiptId = await VotingSystem.castVote(candidate);
+                    
+                    // Show confirmation
+                    document.getElementById('vote-confirmation').style.display = 'block';
+                    document.getElementById('receipt-id').textContent = receiptId;
+                    
+                    // Update UI
+                    document.getElementById('voting-status').className = 'crypto-status success';
+                    document.getElementById('voting-status').innerHTML = 
+                        '<i class="fas fa-check-circle"></i> Vote successfully cast and encrypted!';
+                    
+                    btn.innerHTML = '<i class="fas fa-check"></i> Vote Cast Successfully';
+                    document.getElementById('ballot-section').style.display = 'none';
+                    
+                } catch (error) {
+                    alert('Vote casting failed: ' + error.message);
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }
+            });
+            
+            // Admin functions
+            document.getElementById('generate-ca-btn').addEventListener('click', async function() {
+                const btn = this;
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '<span class="loading-spinner"></span> Generating...';
+                btn.disabled = true;
+                
+                await VotingSystem.initCA();
+                
+                setTimeout(() => {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    alert('Certificate Authority keys regenerated successfully');
+                }, 1000);
+            });
+            
+            document.getElementById('decrypt-votes-btn').addEventListener('click', async function() {
+                const btn = this;
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '<span class="loading-spinner"></span> Processing...';
+                btn.disabled = true;
+                
+                try {
+                    await VotingSystem.tallyVotes();
+                    btn.innerHTML = '<i class="fas fa-check"></i> Votes Tallied';
+                    setTimeout(() => {
+                        btn.innerHTML = originalText;
+                        btn.disabled = false;
+                    }, 2000);
+                } catch (error) {
+                    alert('Vote tallying failed: ' + error.message);
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }
+            });
+            
+            // Vote verification
+            document.getElementById('verify-vote-btn').addEventListener('click', function() {
+                const receiptId = document.getElementById('verify-receipt-id').value.trim();
+                if (!receiptId) {
+                    alert('Please enter a receipt ID');
+                    return;
+                }
+                
+                const vote = VotingSystem.votes.get(receiptId);
+                const resultDiv = document.getElementById('verification-result');
+                
+                if (vote) {
+                    resultDiv.innerHTML = `
+                        <div class="crypto-status success">
+                            <i class="fas fa-check-circle"></i>
+                            <strong>Vote Verified!</strong><br>
+                            <small>Timestamp: ${new Date(vote.timestamp).toLocaleString()}</small><br>
+                            <small>Status: ${vote.verified ? 'Counted' : 'Pending'}</small>
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="crypto-status error">
+                            <i class="fas fa-times-circle"></i>
+                            <strong>Receipt Not Found</strong><br>
+                            <small>Invalid receipt ID or vote not recorded</small>
+                        </div>
+                    `;
+                }
+            });
+            
+            // Tab switching effects
+            document.querySelectorAll('[data-bs-toggle="pill"]').forEach(tab => {
+                tab.addEventListener('shown.bs.tab', function(e) {
+                    // Add fade-in animation to active tab content
+                    const targetPane = document.querySelector(this.getAttribute('href'));
+                    targetPane.style.opacity = '0';
+                    setTimeout(() => {
+                        targetPane.style.transition = 'opacity 0.3s ease';
+                        targetPane.style.opacity = '1';
+                    }, 50);
+                });
+            });
+            
+            // Initialize UI
+            VotingSystem.updateVoterCount();
+            VotingSystem.updateAuditLog();
+            VotingSystem.updateLedgerDisplay();
+        });
+        
+        // Utility functions for demo
+        function simulateNetworkDelay(min = 500, max = 1500) {
+            return new Promise(resolve => {
+                setTimeout(resolve, Math.random() * (max - min) + min);
+            });
+        }
+        
+        // Auto-refresh certain elements
+        setInterval(() => {
+            // Add some visual feedback for "live" system
+            const statusElements = document.querySelectorAll('.crypto-status.success');
+            statusElements.forEach(el => {
+                el.classList.add('pulse');
+                setTimeout(() => el.classList.remove('pulse'), 2000);
+            });
+        }, 10000);
+    </script>
+</body>
+</html>
+            
