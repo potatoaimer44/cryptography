@@ -1,0 +1,23 @@
+{
+  "name": "evoting-system",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "node server.js",
+    "build": "react-scripts build",
+    "dev": "react-scripts start"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "pg": "^8.11.3",
+    "jsonwebtoken": "^9.0.2",
+    "cors": "^2.8.5",
+    "morgan": "^1.10.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-scripts": "^5.0.1",
+    "lucide-react": "^0.263.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.1.6"
+  }
+}
