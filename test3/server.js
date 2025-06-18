@@ -457,14 +457,14 @@ async function initializeDatabase() {
             );
         `);
 
-        const demoAdmin = await pool.query('SELECT * FROM voters WHERE email = $1', ['admin@example.com']);
+        const demoAdmin = await pool.query('SELECT * FROM voters WHERE email = $1', ['aayush@admin.com']);
         if (demoAdmin.rows.length === 0) {
             const keyPair = forge.pki.rsa.generateKeyPair(2048);
             const publicKeyPem = forge.pki.publicKeyToPem(keyPair.publicKey);
-            const hashedPassword = await bcrypt.hash('admin123', 10);
+            const hashedPassword = await bcrypt.hash('adminadmin', 10);
             await pool.query(
                 'INSERT INTO voters (voter_id, name, email, password, public_key, certificate_status, is_admin) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-                ['ADMIN_001', 'Admin User', 'admin@example.com', hashedPassword, publicKeyPem, 'approved', true]
+                ['ADMIN_001', 'Admin User', 'aayush@admin.com', hashedPassword, publicKeyPem, 'approved', true]
             );
             console.log('Demo admin account created');
         }
