@@ -25,7 +25,6 @@ CREATE TABLE votes (
     vote_id VARCHAR(50) PRIMARY KEY,
     voter_id VARCHAR(50) REFERENCES voters(voter_id),
     encrypted_vote TEXT NOT NULL,
-    signature TEXT NOT NULL,
     timestamp TIMESTAMP NOT NULL,
     aes_key TEXT,
     iv TEXT

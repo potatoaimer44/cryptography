@@ -55,7 +55,6 @@ const authenticateAdmin = (req, res, next) => {
 app.post('/api/register', async (req, res) => {
     const { name, email, password, voterID, publicKey } = req.body;
     try {
-        // Convert base64 SPKI public key to PEM format
         const spkiDer = Buffer.from(publicKey, 'base64');
         const publicKeyPem = forge.pki.publicKeyToPem(forge.pki.publicKeyFromAsn1(forge.asn1.fromDer(spkiDer.toString('binary'))));
         const hashedPassword = await bcrypt.hash(password, 10);
@@ -156,10 +155,10 @@ app.post('/api/authenticate', async (req, res) => {
 });
 
 app.post('/api/cast-vote', authenticateToken, async (req, res) => {
-    const { encryptedVote, signature, aesKey, iv } = req.body;
+    const { encryptedVote, aesKey, iv } = req.body;
     const voterID = req.user.voterID;
     try {
-        if (!encryptedVote || !signature || !aesKey || !iv) {
+        if (!encryptedVote || !aesKey || !iv) {
             return res.status(400).json({ error: 'Missing required fields' });
         }
 
@@ -171,14 +170,6 @@ app.post('/api/cast-vote', authenticateToken, async (req, res) => {
             return res.status(400).json({ error: 'Already voted' });
         }
 
-        const publicKey = forge.pki.publicKeyFromPem(voterResult.rows[0].public_key);
-        const md = forge.md.sha256.create();
-        md.update(Buffer.from(encryptedVote, 'base64'));
-        const verified = publicKey.verify(md.digest().bytes(), Buffer.from(signature, 'base64').toString('binary'));
-        if (!verified) {
-            return res.status(401).json({ error: 'Invalid signature' });
-        }
-
         const voteID = `VOTE_${Date.now()}_${crypto.randomBytes(8).toString('hex')}`;
         const blockID = (await pool.query('SELECT COALESCE(MAX(block_id), 0) + 1 AS next_id FROM ledger')).rows[0].next_id;
         const previousBlock = await pool.query('SELECT hash FROM ledger ORDER BY block_id DESC LIMIT 1');
@@ -187,8 +178,8 @@ app.post('/api/cast-vote', authenticateToken, async (req, res) => {
         const hash = crypto.createHash('sha256').update(JSON.stringify({ voteID, encryptedVote, timestamp, previousHash })).digest('base64');
 
         await pool.query(
-            'INSERT INTO votes (vote_id, voter_id, encrypted_vote, signature, timestamp, aes_key, iv) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-            [voteID, voterID, encryptedVote, signature, timestamp, aesKey, iv]
+            'INSERT INTO votes (vote_id, voter_id, encrypted_vote, timestamp, aes_key, iv) VALUES ($1, $2, $3, $4, $5, $6)',
+            [voteID, voterID, encryptedVote, timestamp, aesKey, iv]
         );
 
         await pool.query(
@@ -385,16 +376,27 @@ app.get('/api/verify-vote/:receiptID', async (req, res) => {
 
 app.get('/api/verify-election', async (req, res) => {
     try {
-        const votes = await pool.query('SELECT v.encrypted_vote, v.signature, vr.public_key FROM votes v JOIN voters vr ON v.voter_id = vr.voter_id');
+        const votes = await pool.query('SELECT encrypted_vote, aes_key, iv FROM votes');
         let validVotes = 0;
         let invalidVotes = 0;
         for (const vote of votes.rows) {
-            const publicKey = forge.pki.publicKeyFromPem(vote.public_key);
-            const md = forge.md.sha256.create();
-            md.update(Buffer.from(vote.encrypted_vote, 'base64'));
-            const verified = publicKey.verify(md.digest().bytes(), Buffer.from(vote.signature, 'base64').toString('binary'));
-            if (verified) validVotes++;
-            else invalidVotes++;
+            try {
+                const aesKey = await crypto.webcrypto.subtle.importKey(
+                    "raw",
+                    Buffer.from(vote.aes_key, 'base64'),
+                    { name: "AES-GCM" },
+                    false,
+                    ["decrypt"]
+                );
+                const decrypted = await crypto.webcrypto.subtle.decrypt(
+                    { name: "AES-GCM", iv: Buffer.from(vote.iv, 'base64') },
+                    aesKey,
+                    Buffer.from(vote.encrypted_vote, 'base64')
+                );
+                validVotes++;
+            } catch (error) {
+                invalidVotes++;
+            }
         }
         res.json({ validVotes, invalidVotes });
     } catch (error) {
@@ -451,7 +453,6 @@ async function initializeDatabase() {
                 vote_id VARCHAR(50) PRIMARY KEY,
                 voter_id VARCHAR(50) REFERENCES voters(voter_id),
                 encrypted_vote TEXT NOT NULL,
-                signature TEXT NOT NULL,
                 timestamp TIMESTAMP NOT NULL,
                 aes_key TEXT,
                 iv TEXT

@@ -719,7 +719,7 @@
             input.parentElement.setAttribute('aria-checked', 'true');
         }
 
-        // Cast vote
+                // Cast vote
         async function castVote() {
             if (!currentUser) {
                 showStatus('voteStatus', 'Please authenticate first.', 'error');
@@ -733,7 +733,7 @@
             }
         
             try {
-                // Import private key for signing
+                console.log('privateKey (base64):', privateKey);
                 const privateKeyObj = await crypto.subtle.importKey(
                     "pkcs8",
                     base64ToArrayBuffer(privateKey),
@@ -741,6 +741,7 @@
                     false,
                     ["sign"]
                 );
+                console.log('Imported privateKey algorithm:', privateKeyObj.algorithm);
             
                 const voteData = {
                     candidate: selectedVote.value,
@@ -748,33 +749,30 @@
                     voterIDHash: await hashData(currentUser.voterID)
                 };
             
-                // Generate AES-GCM key
                 const aesKey = await crypto.subtle.generateKey(
                     { name: "AES-GCM", length: 256 },
                     true,
                     ["encrypt", "decrypt"]
                 );
             
-                // Generate IV
                 const iv = crypto.getRandomValues(new Uint8Array(12));
-            
-                // Encrypt vote data with AES-GCM
                 const encryptedVote = await crypto.subtle.encrypt(
                     { name: "AES-GCM", iv: iv },
                     aesKey,
                     new TextEncoder().encode(JSON.stringify(voteData))
                 );
                 const encryptedVoteB64 = arrayBufferToBase64(encryptedVote);
+                console.log('Client encryptedVote (hex):', Array.from(new Uint8Array(encryptedVote)).map(b => b.toString(16).padStart(2, '0')).join(''));
+                console.log('Client encryptedVoteB64:', encryptedVoteB64);
             
-                // Sign the encrypted vote
                 const signature = await crypto.subtle.sign(
                     { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
                     privateKeyObj,
                     encryptedVote
                 );
                 const signatureB64 = arrayBufferToBase64(signature);
+                console.log('Client signatureB64:', signatureB64);
             
-                // Export AES key
                 const exportedAesKey = await crypto.subtle.exportKey("raw", aesKey);
                 const aesKeyB64 = arrayBufferToBase64(exportedAesKey);
                 const ivB64 = arrayBufferToBase64(iv);
@@ -795,8 +793,8 @@
             
                 const contentType = response.headers.get('content-type');
                 if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(errorText || 'Unknown server error');
+                    const errorData = await response.text();
+                    throw new Error(errorData);
                 }
             
                 if (!contentType || !contentType.includes('application/json')) {
