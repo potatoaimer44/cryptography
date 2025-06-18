@@ -724,13 +724,13 @@
                 showStatus('voteStatus', 'Please authenticate first.', 'error');
                 return;
             }
-        
+
             const selectedVote = document.querySelector('input[name="vote"]:checked');
             if (!selectedVote) {
                 showStatus('voteStatus', 'Please select a candidate.', 'error');
                 return;
             }
-        
+
             try {
                 // Import private key for signing
                 const privateKeyObj = await crypto.subtle.importKey(
@@ -740,28 +740,16 @@
                     false,
                     ["sign"]
                 );
-            
+
                 const voteData = {
                     candidate: selectedVote.value,
                     timestamp: new Date().toISOString(),
                     voterIDHash: await hashData(currentUser.voterID)
                 };
-            
+
                 // Fetch public key for encryption
-                if (!currentUser.voterID) {
-                    showStatus('voteStatus', 'Invalid voter ID.', 'error');
-                    return;
-                }
                 const publicKeyResponse = await fetch(`/api/public-key/${currentUser.voterID}`);
-                if (!publicKeyResponse.ok) {
-                    const errorText = await publicKeyResponse.text();
-                    throw new Error(`Failed to fetch public key: ${errorText}`);
-                }
-                const publicKeyText = await publicKeyResponse.text();
-                if (!publicKeyText) {
-                    throw new Error('Empty public key response');
-                }
-                const { publicKey: publicKeyB64 } = JSON.parse(publicKeyText);
+                const { publicKey: publicKeyB64 } = await publicKeyResponse.json();
                 const publicKey = await crypto.subtle.importKey(
                     "spki",
                     base64ToArrayBuffer(publicKeyB64),
@@ -775,7 +763,7 @@
                     new TextEncoder().encode(JSON.stringify(voteData))
                 );
                 const encryptedVoteB64 = arrayBufferToBase64(encryptedVote);
-            
+
                 // Sign the encrypted vote
                 const signature = await crypto.subtle.sign(
                     { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
@@ -783,7 +771,7 @@
                     base64ToArrayBuffer(encryptedVoteB64)
                 );
                 const signatureB64 = arrayBufferToBase64(signature);
-            
+
                 const response = await fetch('/api/cast-vote', {
                     method: 'POST',
                     headers: {
@@ -792,32 +780,21 @@
                     },
                     body: JSON.stringify({ encryptedVote: encryptedVoteB64, signature: signatureB64 })
                 });
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(`Vote submission failed: ${errorText}`);
-                }
-                const responseText = await response.text();
-                if (!responseText) {
-                    throw new Error('Empty vote submission response');
-                }
-                const { receipt } = JSON.parse(responseText);
-            
+                if (!response.ok) throw new Error(await response.text());
+                const { receipt } = await response.json();
+
                 showVoteReceipt(receipt);
                 showStatus('voteStatus', 'Vote cast successfully!', 'success');
                 setTimeout(() => {
-                    const ballotSection = document.getElementById('ballotSection');
-                    const authSection = document.getElementById('authSection');
-                    if (ballotSection && authSection) {
-                        ballotSection.style.display = 'none';
-                        authSection.style.display = 'block';
-                        clearAuthForm();
-                    }
+                    document.getElementById('ballotSection').style.display = 'none';
+                    document.getElementById('authSection').style.display = 'block';
+                    clearAuthForm();
                 }, 3000);
             } catch (error) {
                 console.error('Vote casting error:', error);
                 showStatus('voteStatus', `Error: ${error.message}`, 'error');
             }
-        }       
+        }
 
         // Hash data
         async function hashData(data) {

@@ -1,4 +1,4 @@
-0<script type="text/javascript">
+<script type="text/javascript">
         var gk_isXlsx = false;
         var gk_xlsxFileLookup = {};
         var gk_fileData = {};
@@ -724,13 +724,13 @@
                 showStatus('voteStatus', 'Please authenticate first.', 'error');
                 return;
             }
-        
+
             const selectedVote = document.querySelector('input[name="vote"]:checked');
             if (!selectedVote) {
                 showStatus('voteStatus', 'Please select a candidate.', 'error');
                 return;
             }
-        
+
             try {
                 // Import private key for signing
                 const privateKeyObj = await crypto.subtle.importKey(
@@ -740,28 +740,16 @@
                     false,
                     ["sign"]
                 );
-            
+
                 const voteData = {
                     candidate: selectedVote.value,
                     timestamp: new Date().toISOString(),
                     voterIDHash: await hashData(currentUser.voterID)
                 };
-            
+
                 // Fetch public key for encryption
-                if (!currentUser.voterID) {
-                    showStatus('voteStatus', 'Invalid voter ID.', 'error');
-                    return;
-                }
                 const publicKeyResponse = await fetch(`/api/public-key/${currentUser.voterID}`);
-                if (!publicKeyResponse.ok) {
-                    const errorText = await publicKeyResponse.text();
-                    throw new Error(`Failed to fetch public key: ${errorText}`);
-                }
-                const publicKeyText = await publicKeyResponse.text();
-                if (!publicKeyText) {
-                    throw new Error('Empty public key response');
-                }
-                const { publicKey: publicKeyB64 } = JSON.parse(publicKeyText);
+                const { publicKey: publicKeyB64 } = await publicKeyResponse.json();
                 const publicKey = await crypto.subtle.importKey(
                     "spki",
                     base64ToArrayBuffer(publicKeyB64),
@@ -775,7 +763,7 @@
                     new TextEncoder().encode(JSON.stringify(voteData))
                 );
                 const encryptedVoteB64 = arrayBufferToBase64(encryptedVote);
-            
+
                 // Sign the encrypted vote
                 const signature = await crypto.subtle.sign(
                     { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
@@ -783,7 +771,7 @@
                     base64ToArrayBuffer(encryptedVoteB64)
                 );
                 const signatureB64 = arrayBufferToBase64(signature);
-            
+
                 const response = await fetch('/api/cast-vote', {
                     method: 'POST',
                     headers: {
@@ -792,32 +780,21 @@
                     },
                     body: JSON.stringify({ encryptedVote: encryptedVoteB64, signature: signatureB64 })
                 });
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(`Vote submission failed: ${errorText}`);
-                }
-                const responseText = await response.text();
-                if (!responseText) {
-                    throw new Error('Empty vote submission response');
-                }
-                const { receipt } = JSON.parse(responseText);
-            
+                if (!response.ok) throw new Error(await response.text());
+                const { receipt } = await response.json();
+
                 showVoteReceipt(receipt);
                 showStatus('voteStatus', 'Vote cast successfully!', 'success');
                 setTimeout(() => {
-                    const ballotSection = document.getElementById('ballotSection');
-                    const authSection = document.getElementById('authSection');
-                    if (ballotSection && authSection) {
-                        ballotSection.style.display = 'none';
-                        authSection.style.display = 'block';
-                        clearAuthForm();
-                    }
+                    document.getElementById('ballotSection').style.display = 'none';
+                    document.getElementById('authSection').style.display = 'block';
+                    clearAuthForm();
                 }, 3000);
             } catch (error) {
                 console.error('Vote casting error:', error);
                 showStatus('voteStatus', `Error: ${error.message}`, 'error');
             }
-        }       
+        }
 
         // Hash data
         async function hashData(data) {
@@ -1001,198 +978,5 @@
             console.log('Secure E-Voting System initialized');
         });
     </script>
-    <!-- Add this script at the end of the <body> in your voter-side index.html -->
-    <script>
-        async function authenticateUser() {
-            const email = document.getElementById('auth-email').value;
-            const password = document.getElementById('auth-password').value;
-            const privateKeyPem = document.getElementById('auth-private-key').value;
-            const voterID = email; // Adjust if voterID is stored differently
-        
-            try {
-                // Step 1: Get challenge from server
-                const challengeResponse = await fetch(`/api/auth-challenge/${voterID}`, {
-                    method: 'GET',
-                    headers: { 'Content-Type': 'application/json' },
-                });
-                if (!challengeResponse.ok) {
-                    throw new Error(await challengeResponse.text());
-                }
-                const challengeData = await challengeResponse.json();
-                const challenge = challengeData.challenge;
-            
-                // Step 2: Import private key
-                const privateKey = await importPrivateKey(privateKeyPem);
-            
-                // Step 3: Sign challenge
-                const signature = await signChallenge(challenge, privateKey);
-            
-                // Step 4: Authenticate with server
-                const authResponse = await fetch('/api/authenticate', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ voterID, signature: signature }),
-                });
-                if (!authResponse.ok) {
-                    throw new Error(await authResponse.text());
-                }
-                const authResult = await authResponse.text();
-                alert(authResult); // E.g., "Authentication successful"
-                return true;
-            } catch (error) {
-                alert(`Authentication failed: ${error.message}`);
-                return false;
-            }
-        }
-        
-        async function castVote() {
-            const candidate = document.querySelector('input[name="candidate"]:checked')?.value;
-            if (!candidate) {
-                alert('Please select a candidate');
-                return;
-            }
-        
-            const email = document.getElementById('auth-email').value;
-            const password = document.getElementById('auth-private-key').value; // For JWT
-            const privateKeyPem = document.getElementById('auth-private-key').value;
-        
-            try {
-                // Step 1: Authenticate user and get JWT
-                const loginResponse = await fetch('/api/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password }),
-                });
-                if (!loginResponse.ok) {
-                    throw new Error(await loginResponse.text());
-                }
-                const { token } = await loginResponse.json();
-            
-                // Step 2: Authenticate with challenge (if not already done)
-                const isAuthenticated = await authenticateUser();
-                if (!isAuthenticated) {
-                    throw new Error('Authentication failed');
-                }
-            
-                // Step 3: Prepare vote data
-                const voteData = { candidate, timestamp: new Date().toISOString() };
-                const voteString = JSON.stringify(voteData);
-            
-                // Step 4: Encrypt vote with AES-GCM
-                const { encryptedVote, aesKey, iv } = await encryptVote(voteString);
-            
-                // Step 5: Sign encrypted vote
-                const privateKey = await importPrivateKey(privateKeyPem);
-                const signature = await signData(encryptedVote, privateKey);
-            
-                // Step 6: Send vote to server
-                const voteResponse = await fetch('/api/cast-vote', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`,
-                    },
-                    body: JSON.stringify({
-                        encryptedVote: encryptedVote,
-                        signature: signature,
-                        aesKey: aesKey,
-                        iv: iv,
-                    }),
-                });
-            
-                // Step 7: Handle response
-                const contentType = voteResponse.headers.get('content-type');
-                let responseData;
-                if (contentType && contentType.includes('application/json')) {
-                    responseData = await voteResponse.json();
-                } else {
-                    responseData = { message: await voteResponse.text() };
-                }
-            
-                if (!voteResponse.ok) {
-                    throw new Error(responseData.message || `HTTP error! Status: ${voteResponse.status}`);
-                }
-            
-                // Step 8: Display receipt
-                const { receiptID, timestamp, blockHash } = responseData;
-                alert(`Vote cast successfully!\nReceipt ID: ${receiptID}\nTimestamp: ${timestamp}\nBlock Hash: ${blockHash}`);
-            } catch (error) {
-                console.error('Vote casting error:', error);
-                alert(`Failed to cast vote: ${error.message}`);
-            }
-        }
-        
-        // Helper functions for crypto operations
-        async function importPrivateKey(pem) {
-            const pemHeader = '-----BEGIN PRIVATE KEY-----';
-            const pemFooter = '-----END PRIVATE KEY-----';
-            const pemContents = pem.replace(pemHeader, '').replace(pemFooter, '').replace(/\n/g, '');
-            const binaryDer = atob(pemContents);
-            const buffer = new Uint8Array(binaryDer.length);
-            for (let i = 0; i < binaryDer.length; i++) {
-                buffer[i] = binaryDer.charCodeAt(i);
-            }
-            return await crypto.subtle.importKey(
-                'pkcs8',
-                buffer,
-                { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
-                false,
-                ['sign']
-            );
-        }
-        
-        async function signChallenge(challenge, privateKey) {
-            const data = new TextEncoder().decode(hexToArrayBuffer(challenge));
-            const signature = await crypto.subtle.sign(
-                { name: 'RSASSA-PKCS1-v1_5' },
-                privateKey,
-                data
-            );
-            return btoa(String.fromCharCode.apply(null, new Uint8Array(signature)));
-        }
-        
-        async function hexToArrayBuffer(hex) {
-            const bytes = new Uint8Array(hex.length / 2);
-            for (let i = 0; i < hex.length; i += 2) {
-                bytes[i * 2] = parseInt(hex.substr(i, 2), 16);
-            }
-            return bytes.buffer;
-        }
-        
-        async function encryptVote(voteString) {
-            const iv = crypto.getRandomValues(new Uint8Array(12));
-            const key = await crypto.subtle.generateKey(
-                { name: 'AES-GCM', length: 128 },
-                true,
-                ['encrypt']
-            );
-            const encodedData = new TextEncoder().encode(voteString);
-            const encrypted = await crypto.subtle.encrypt(
-                { name: 'AES-GCM', iv: iv },
-                key,
-                encodedData
-            );
-            const exportedKey = await crypto.subtle.exportKey('raw', key);
-            return {
-                encryptedVote: Buffer.from(encrypted).toString('base64'),
-                aesKey: Buffer.from(exportedKey).toString('base64'),
-                iv: Buffer.from(iv).toString('base64'),
-            };
-        }
-        
-        async function signData(data, privateKey) {
-            const encodedData = Buffer.from(data, 'base64');
-            const signature = await crypto.subtle.sign(
-                { name: 'RSASSA-PKCS1-v1_5' },
-                privateKey,
-                encodedData
-            );
-            return Buffer.from(signature).toString('base64');
-        }
-        
-        // Event listeners for buttons
-        document.getElementById('auth-button').addEventListener('click', authenticateUser);
-        document.getElementById('cast-vote-btn').addEventListener('click', castVote);
-        </script>
 </body>
 </html>
