@@ -1,0 +1,516 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔐 Admin Panel</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.5/dist/chart.umd.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f4f7fa;
+            padding: 20px;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        h2, h3, h4 {
+            color: #1a73e8;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        section {
+            max-width: 800px;
+            margin: 0 auto 40px;
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        #login-section, #admin-section {
+            transition: opacity 0.3s ease;
+        }
+
+        #login-section {
+            max-width: 400px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #555;
+        }
+
+        input[type="email"], input[type="password"], input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #1a73e8;
+            box-shadow: 0 0 5px rgba(26, 115, 232, 0.3);
+        }
+
+        button {
+            background-color: #1a73e8;
+            color: #fff;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            margin-right: 10px;
+        }
+
+        button:hover {
+            background-color: #1557b0;
+        }
+
+        #error-message, #certificate-feedback, #results-feedback {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        #error-message, #certificate-feedback.error, #results-feedback.error {
+            background-color: #ffe6e6;
+            color: #d32f2f;
+            display: none;
+        }
+
+        #certificate-feedback.success, #results-feedback.success {
+            background-color: #e6ffed;
+            color: #2e7d32;
+            display: none;
+        }
+
+        #admin-section > div {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        #admin-section > div > div {
+            flex: 1 1 300px;
+        }
+
+        canvas {
+            max-width: 100%;
+            margin-top: 20px;
+            background: #fff;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        ul#pending-certificates {
+            list-style: none;
+            margin-bottom: 15px;
+        }
+
+        ul#pending-certificates li {
+            padding: 8px;
+            background: #f9f9f9;
+            margin-bottom: 5px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        ul#pending-certificates input[type="checkbox"] {
+            cursor: pointer;
+        }
+
+        @media (max-width: 600px) {
+            section {
+                padding: 15px;
+            }
+
+            button {
+                width: 100%;
+                margin-bottom: 10px;
+            }
+
+            #admin-section > div {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <section id="login-section">
+        <h2>🔐 Admin Login</h2>
+        <div>
+            <label>Email: <input type="email" id="email" required></label>
+        </div>
+        <div>
+            <label>Password: <input type="password" id="password" required></label>
+        </div>
+        <button onclick="adminLogin()">Login</button>
+        <p id="error-message"></p>
+    </section>
+
+    <section id="admin-section" style="display: none;">
+        <h2>⚙️ Election Administration</h2>
+        <div>
+            <div>
+                <p><strong>Registered Voters:</strong> <span id="total-voters">0</span></p>
+                <p><strong>Votes Cast:</strong> <span id="total-votes">0</span></p>
+                <p><strong>Active Certificates:</strong> <span id="active-certs">0</span></p>
+                <p><strong>Revoked Certificates:</strong> <span id="revoked-certs">0</span></p>
+            </div>
+            <canvas id="stats-chart"></canvas>
+        </div>
+
+        <div>
+            <div>
+                <h3>Certificate Management</h3>
+                <p>Pending Certificate Requests: <ul id="pending-certificates"></ul></p>
+                <button onclick="approveCertificates()">Approve Selected</button>
+                <button onclick="rejectCertificates()">Reject Selected</button>
+                <p id="certificate-feedback"></p>
+                <h4>Revoke Certificate</h4>
+                <label>Voter ID: <input type="text" id="revoke-voter-id"></label>
+                <button onclick="revokeCertificate()">Revoke Certificate</button>
+            </div>
+            <div>
+                <h3>Election Results</h3>
+                <button onclick="tallyVotes()">Tally All Votes</button>
+                <button onclick="publishResults()">Publish Results</button>
+                <p id="results-feedback" style="display: none;"></p>
+            </div>
+        </div>
+
+        <button onclick="logout()">Logout</button>
+    </section>
+
+    <script>
+        const API_BASE = 'http://localhost:3000/api';
+        let token = localStorage.getItem('adminToken');
+
+        // Check token on page load
+        window.onload = async () => {
+            if (token) {
+                try {
+                    const response = await fetch(`${API_BASE}/admin/stats`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (response.ok) {
+                        const stats = await response.json();
+                        showAdminSection(stats);
+                    } else {
+                        localStorage.removeItem('adminToken');
+                        showLoginSection();
+                    }
+                } catch (error) {
+                    localStorage.removeItem('adminToken');
+                    showLoginSection();
+                }
+            } else {
+                showLoginSection();
+            }
+        };
+
+        function showLoginSection() {
+            document.getElementById('login-section').style.display = 'block';
+            document.getElementById('admin-section').style.display = 'none';
+        }
+
+        function showAdminSection(stats) {
+            document.getElementById('login-section').style.display = 'none';
+            document.getElementById('admin-section').style.display = 'block';
+            updateStats(stats);
+            renderChart(stats);
+            loadPendingCertificates();
+        }
+
+        async function adminLogin() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const errorMessage = document.getElementById('error-message');
+
+            try {
+                const response = await fetch(`${API_BASE}/admin/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    token = data.token;
+                    localStorage.setItem('adminToken', token);
+                    const statsResponse = await fetch(`${API_BASE}/admin/stats`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const stats = await statsResponse.json();
+                    showAdminSection(stats);
+                } else {
+                    errorMessage.textContent = data.message || 'Invalid credentials';
+                    errorMessage.style.display = 'block';
+                }
+            } catch (error) {
+                errorMessage.textContent = 'Login failed';
+                errorMessage.style.display = 'block';
+            }
+        }
+
+        function updateStats(stats) {
+            document.getElementById('total-voters').textContent = stats.totalVoters;
+            document.getElementById('total-votes').textContent = stats.totalVotes;
+            document.getElementById('active-certs').textContent = stats.activeCerts;
+            document.getElementById('revoked-certs').textContent = stats.revokedCerts;
+        }
+
+        function renderChart(stats) {
+            const ctx = document.getElementById('stats-chart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Registered Voters', 'Votes Cast', 'Active Certificates', 'Revoked Certificates'],
+                    datasets: [{
+                        label: 'Election Statistics',
+                        data: [stats.totalVoters, stats.totalVotes, stats.activeCerts, stats.revokedCerts],
+                        backgroundColor: ['#36A2EB', '#FF6384', '#FFCE56', '#4BC0C0'],
+                        borderColor: ['#2E8BC0', '#D81B60', '#F4B400', '#3AAFA9'],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: { beginAtZero: true, title: { display: true, text: 'Count' } },
+                        x: { title: { display: true, text: 'Category' } }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        title: { display: true, text: 'Election Administration Overview' }
+                    }
+                }
+            });
+        }
+
+        async function loadPendingCertificates() {
+            try {
+                const response = await fetch(`${API_BASE}/admin/pending-certificates`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const certificates = await response.json();
+                const list = document.getElementById('pending-certificates');
+                list.innerHTML = '';
+                certificates.forEach(cert => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `<input type="checkbox" value="${cert.voter_id}"> ${cert.name} (Voter ID: ${cert.voter_id}, Requested: ${new Date(cert.request_date).toLocaleString()})`;
+                    list.appendChild(li);
+                });
+            } catch (error) {
+                console.error('Error loading certificates:', error);
+            }
+        }
+
+        async function approveCertificates() {
+            const selected = Array.from(document.querySelectorAll('#pending-certificates input:checked')).map(input => input.value);
+            const feedback = document.getElementById('certificate-feedback');
+            if (selected.length === 0) {
+                feedback.textContent = 'No certificates selected';
+                feedback.className = 'error';
+                feedback.style.display = 'block';
+                return;
+            }
+            try {
+                for (const voterID of selected) {
+                    await fetch(`${API_BASE}/admin/approve-certificate`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ voterID })
+                    });
+                }
+                feedback.textContent = 'Certificates approved successfully';
+                feedback.className = 'success';
+                feedback.style.display = 'block';
+                loadPendingCertificates();
+            } catch (error) {
+                feedback.textContent = 'Error approving certificates';
+                feedback.className = 'error';
+                feedback.style.display = 'block';
+            }
+        }
+
+        async function rejectCertificates() {
+            const selected = Array.from(document.querySelectorAll('#pending-certificates input:checked')).map(input => input.value);
+            const feedback = document.getElementById('certificate-feedback');
+            if (selected.length === 0) {
+                feedback.textContent = 'No certificates selected';
+                feedback.className = 'error';
+                feedback.style.display = 'block';
+                return;
+            }
+            try {
+                for (const voterID of selected) {
+                    await fetch(`${API_BASE}/admin/reject-certificate`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ voterID })
+                    });
+                }
+                feedback.textContent = 'Certificates rejected successfully';
+                feedback.className = 'success';
+                feedback.style.display = 'block';
+                loadPendingCertificates();
+            } catch (error) {
+                feedback.textContent = 'Error rejecting certificates';
+                feedback.className = 'error';
+                feedback.style.display = 'block';
+            }
+        }
+
+        async function revokeCertificate() {
+            const voterID = document.getElementById('revoke-voter-id').value;
+            const feedback = document.getElementById('certificate-feedback');
+            if (!voterID) {
+                feedback.textContent = 'Voter ID required';
+                feedback.className = 'error';
+                feedback.style.display = 'block';
+                return;
+            }
+            try {
+                const response = await fetch(`${API_BASE}/admin/revoke-certificate`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ voterID })
+                });
+                if (response.ok) {
+                    feedback.textContent = 'Certificate revoked successfully';
+                    feedback.className = 'success';
+                    feedback.style.display = 'block';
+                    document.getElementById('revoke-voter-id').value = '';
+                    const statsResponse = await fetch(`${API_BASE}/admin/stats`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const stats = await statsResponse.json();
+                    updateStats(stats);
+                    renderChart(stats);
+                } else {
+                    feedback.textContent = 'Error revoking certificate';
+                    feedback.className = 'error';
+                    feedback.style.display = 'block';
+                }
+            } catch (error) {
+                feedback.textContent = 'Error revoking certificate';
+                feedback.className = 'error';
+                feedback.style.display = 'block';
+            }
+        }
+
+        async function tallyVotes() {
+            const feedback = document.getElementById('results-feedback');
+            try {
+                const response = await fetch(`${API_BASE}/admin/tally-votes`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const results = await response.json();
+                feedback.textContent = `Results: ${JSON.stringify(results)}`;
+                feedback.className = 'success';
+                feedback.style.display = 'block';
+            } catch (error) {
+                feedback.textContent = 'Error tallying votes';
+                feedback.className = 'error';
+                feedback.style.display = 'block';
+            }
+        }
+
+        async function publishResults() {
+            const feedback = document.getElementById('results-feedback');
+            try {
+                const response = await fetch(`${API_BASE}/admin/publish-results`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (response.ok) {
+                    feedback.textContent = 'Results published successfully';
+                    feedback.className = 'success';
+                    feedback.style.display = 'block';
+                } else {
+                    feedback.textContent = 'Error publishing results';
+                    feedback.className = 'error';
+                    feedback.style.display = 'block';
+                }
+            } catch (error) {
+                feedback.textContent = 'Error publishing results';
+                feedback.className = 'error';
+                feedback.style.display = 'block';
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('adminToken');
+            token = null;
+            showLoginSection();
+        }
+    </script>
+</body>
+</html>
