@@ -162,6 +162,35 @@
             display: block;
         }
 
+        .panel h2 {
+            margin-bottom: 20px;
+        }
+        .panel h3 {
+            margin-top: 25px;
+            margin-bottom: 15px;
+        }
+        .panel h3:first-of-type {
+            margin-top: 0;
+        }
+        .panel p {
+            margin-bottom: 20px;
+        }
+        .panel .btn {
+            margin-bottom: 15px;
+        }
+        .panel .form-group {
+            margin-bottom: 20px;
+        }
+        .panel .stats-grid {
+            margin-bottom: 25px;
+        }
+        .panel #ledgerDisplay {
+            margin-top: 20px;
+        }
+        .panel #verificationResults {
+            margin-top: 15px;
+        }
+
         .form-group {
             margin-bottom: 20px;
         }
@@ -435,6 +464,8 @@
                 </div>
                 <div class="form-group">
                     <label for="privateKeyAuth">Private Key (for signing):</label>
+                    <input type="file" id="privateKeyFile" accept=".key,.txt,.pem" onchange="loadPrivateKeyFromFile()" style="margin-bottom: 10px;">
+                    <small style="display: block; margin-bottom: 10px; color: #666;">Or paste your private key below:</small>
                     <textarea id="privateKeyAuth" rows="3" placeholder="Paste your private key here"></textarea>
                 </div>
                 <button class="btn" onclick="authenticateVoter()">Authenticate</button>
@@ -641,6 +672,20 @@
             } catch (error) {
                 console.error('Certificate request error:', error);
                 showStatus('certificateStatus', `Error: ${error.message}`, 'error');
+            }
+        }
+
+        // Load private key from file
+        function loadPrivateKeyFromFile() {
+            const fileInput = document.getElementById('privateKeyFile');
+            const file = fileInput.files[0];
+            
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('privateKeyAuth').value = e.target.result;
+                };
+                reader.readAsText(file);
             }
         }
 

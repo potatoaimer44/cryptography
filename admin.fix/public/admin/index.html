@@ -81,6 +81,37 @@
             margin-left: auto;
             margin-right: auto;
         }
+        .nav-tabs {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 30px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 50px;
+            padding: 5px;
+        }
+        .nav-tab {
+            padding: 12px 24px;
+            background: transparent;
+            border: none;
+            color: white;
+            cursor: pointer;
+            border-radius: 25px;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+        .nav-tab.active {
+            background: rgba(255,255,255,0.2);
+            backdrop-filter: blur(10px);
+        }
+        .nav-tab:hover {
+            background: rgba(255,255,255,0.15);
+        }
+        .panel {
+            display: none;
+        }
+        .panel.active {
+            display: block;
+        }
         .admin-stats {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -176,6 +207,12 @@
         ul#pending-certificates input[type="checkbox"] {
             cursor: pointer;
         }
+        .admin-panel {
+            padding-top: 20px;
+        }
+        .admin-panel:not(.active) {
+            display: none;
+        }
         .admin-flex {
             display: flex;
             flex-wrap: wrap;
@@ -254,48 +291,62 @@
             <p id="error-message"></p>
         </section>
 
-        <section id="admin-section" class="admin-card" style="display: none;">
-            <h3>⚙️ Election Administration</h3>
-            <div class="admin-stats">
-                <div class="stat-card">
-                    <div class="stat-number" id="total-voters">0</div>
-                    <div class="stat-label">Registered Voters</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number" id="total-votes">0</div>
-                    <div class="stat-label">Votes Cast</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number" id="active-certs">0</div>
-                    <div class="stat-label">Active Certificates</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number" id="revoked-certs">0</div>
-                    <div class="stat-label">Revoked Certificates</div>
-                </div>
+        <div id="admin-main-content" style="display: none;">
+            <div class="nav-tabs">
+                <button class="nav-tab active" onclick="showPanel('dashboard', event)">Dashboard & Certificates</button>
+                <button class="nav-tab" onclick="showPanel('results', event)">Election Results</button>
             </div>
-            <canvas id="stats-chart"></canvas>
-            <div class="admin-flex">
-                <div>
+
+            <div id="dashboard" class="panel active admin-card">
+                <h3>⚙️ Election Dashboard</h3>
+                <div class="admin-stats">
+                    <div class="stat-card">
+                        <div class="stat-number" id="total-voters">0</div>
+                        <div class="stat-label">Registered Voters</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="total-votes">0</div>
+                        <div class="stat-label">Votes Cast</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="active-certs">0</div>
+                        <div class="stat-label">Active Certificates</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="revoked-certs">0</div>
+                        <div class="stat-label">Revoked Certificates</div>
+                    </div>
+                </div>
+                <canvas id="stats-chart"></canvas>
+
+                <div id="cert-management-panel" style="margin-top: 40px;">
                     <h4>Certificate Management</h4>
-                    <p>Pending Certificate Requests:</p>
+                    <p>Review and approve or reject certificate requests from voters.</p>
                     <ul id="pending-certificates"></ul>
                     <button onclick="approveCertificates()">Approve Selected</button>
                     <button onclick="rejectCertificates()">Reject Selected</button>
                     <p id="certificate-feedback"></p>
+                    
                     <h4>Revoke Certificate</h4>
+                    <p>Permanently revoke a voter's certificate by their ID.</p>
                     <label>Voter ID: <input type="text" id="revoke-voter-id"></label>
                     <button onclick="revokeCertificate()">Revoke Certificate</button>
                 </div>
-                <div>
-                    <h4>Election Results</h4>
-                    <button onclick="tallyVotes()">Tally All Votes</button>
-                    <button onclick="publishResults()">Publish Results</button>
-                    <p id="results-feedback" style="display: none;"></p>
-                </div>
             </div>
-            <button onclick="logout()">Logout</button>
-        </section>
+
+            <div id="results" class="panel admin-card">
+                <h3>📊 Election Results</h3>
+                <p>Tally votes and publish the final results to the public.</p>
+                <button onclick="tallyVotes()">Tally All Votes</button>
+                <button onclick="publishResults()">Publish Results</button>
+                <canvas id="results-pie-chart" style="max-width: 600px; margin: 20px auto 0;"></canvas>
+                <p id="results-feedback" style="display: none;"></p>
+            </div>
+
+            <div style="text-align: center; margin-top: 20px;">
+                 <button onclick="logout()">Logout</button>
+            </div>
+        </div>
     </div>
     <script>
         const API_BASE = 'http://localhost:3000/api';
@@ -326,12 +377,12 @@
 
         function showLoginSection() {
             document.getElementById('login-section').style.display = 'block';
-            document.getElementById('admin-section').style.display = 'none';
+            document.getElementById('admin-main-content').style.display = 'none';
         }
 
         function showAdminSection(stats) {
             document.getElementById('login-section').style.display = 'none';
-            document.getElementById('admin-section').style.display = 'block';
+            document.getElementById('admin-main-content').style.display = 'block';
             updateStats(stats);
             renderChart(stats);
             loadPendingCertificates();
@@ -522,6 +573,36 @@
             }
         }
 
+        let resultsPieChart = null;
+        function renderResultsPieChart(results) {
+            const ctx = document.getElementById('results-pie-chart').getContext('2d');
+            if (resultsPieChart) {
+                resultsPieChart.destroy();
+            }
+
+            const labels = Object.keys(results);
+            const data = Object.values(results);
+
+            resultsPieChart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Vote Count',
+                        data: data,
+                        backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'],
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'top' },
+                        title: { display: true, text: 'Election Vote Tally' }
+                    }
+                }
+            });
+        }
+
         async function tallyVotes() {
             const feedback = document.getElementById('results-feedback');
             try {
@@ -529,7 +610,8 @@
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const results = await response.json();
-                feedback.textContent = `Results: ${JSON.stringify(results)}`;
+                renderResultsPieChart(results);
+                feedback.textContent = `Vote tally successful. Chart updated.`;
                 feedback.className = 'success';
                 feedback.style.display = 'block';
             } catch (error) {
@@ -566,6 +648,23 @@
             localStorage.removeItem('adminToken');
             token = null;
             showLoginSection();
+        }
+
+        function showPanel(panelId, event) {
+            document.querySelectorAll('.panel').forEach(panel => {
+                panel.classList.remove('active');
+            });
+            document.querySelectorAll('.nav-tabs .nav-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            document.getElementById(panelId).classList.add('active');
+            if(event) {
+                event.currentTarget.classList.add('active');
+            } else {
+                // Activate the first tab by default if no event is passed
+                document.querySelector('.nav-tabs .nav-tab').classList.add('active');
+            }
         }
     </script>
 </body>
