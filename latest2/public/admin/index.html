@@ -666,6 +666,239 @@
                 document.querySelector('.nav-tabs .nav-tab').classList.add('active');
             }
         }
+
+        // Generate key pair automatically during registration
+        async function generateKeyPair() {
+            const keyPair = await crypto.subtle.generateKey(
+                {
+                    name: "RSASSA-PKCS1-v1_5",
+                    modulusLength: 2048,
+                    publicExponent: new Uint8Array([1, 0, 1]),
+                    hash: "SHA-256"
+                },
+                true, // extractable
+                ["sign", "verify"]
+            );
+            
+            // Export public key for server storage
+            const publicKeyBuffer = await crypto.subtle.exportKey("spki", keyPair.publicKey);
+            const publicKeyBase64 = btoa(String.fromCharCode(...new Uint8Array(publicKeyBuffer)));
+            
+            // Store private key in browser storage (IndexedDB is more secure than localStorage)
+            await storePrivateKey(keyPair.privateKey);
+            
+            return publicKeyBase64;
+        }
+
+        // Store private key securely in IndexedDB
+        async function storePrivateKey(privateKey) {
+            const db = await openDB('votingKeys', 1, {
+                upgrade(db) {
+                    db.createObjectStore('keys');
+                }
+            });
+            
+            await db.put('keys', privateKey, 'voterPrivateKey');
+        }
+
+        // Smart card authentication
+        async function authenticateWithSmartCard() {
+            try {
+                // Use Web Crypto API with smart card
+                const smartCardProvider = await navigator.credentials.get({
+                    publicKey: {
+                        challenge: new Uint8Array(32),
+                        rpId: window.location.hostname,
+                        userVerification: "required",
+                        authenticatorSelection: {
+                            authenticatorAttachment: "cross-platform"
+                        }
+                    }
+                });
+                
+                return smartCardProvider;
+            } catch (error) {
+                console.error('Smart card authentication failed:', error);
+                throw error;
+            }
+        }
+
+        // Automatic certificate issuance during registration
+        async function registerWithAutoCert(name, email, voterID) {
+            // Generate key pair in browser
+            const keyPair = await generateKeyPair();
+            
+            // Request certificate from CA
+            const certRequest = await fetch('/api/request-auto-certificate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name,
+                    email,
+                    voterID,
+                    publicKey: keyPair.publicKey
+                })
+            });
+            
+            const certificate = await certRequest.json();
+            
+            // Store certificate locally
+            await storeCertificate(certificate);
+            
+            return certificate;
+        }
+
+        // HSM-based authentication
+        async function authenticateWithHSM(voterID) {
+            const challenge = await fetch(`/api/hsm-challenge/${voterID}`).then(r => r.json());
+            
+            // Use HSM to sign challenge
+            const signature = await signWithHSM(challenge.challenge, voterID);
+            
+            return await fetch('/api/hsm-authenticate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ voterID, signature })
+            });
+        }
+
+        // Tier 1: Basic username/password (fallback)
+        // Tier 2: WebAuthn (preferred)
+        // Tier 3: Smart card (enterprise)
+
+        async function authenticateUser(voterID, method = 'webauthn') {
+            switch (method) {
+                case 'webauthn':
+                    return await authenticateWithWebAuthn(voterID);
+                case 'smartcard':
+                    return await authenticateWithSmartCard(voterID);
+                case 'password':
+                    return await authenticateWithPassword(voterID);
+                default:
+                    throw new Error('Unsupported authentication method');
+            }
+        }
+
+        // Comprehensive audit logging
+        async function logAuditEvent(userId, action, resourceType, resourceId, details) {
+            try {
+                await pool.query(
+                    'INSERT INTO audit_logs (user_id, action, resource_type, resource_id, details, ip_address, user_agent) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+                    [userId, action, resourceType, resourceId, JSON.stringify(details), req.ip, req.get('User-Agent')]
+                );
+            } catch (error) {
+                console.error('Audit logging error:', error);
+            }
+        }
+
+        // Audit trail endpoint
+        app.get('/api/admin/audit-trail', authenticateAdmin, async (req, res) => {
+            const { startDate, endDate, action, userId, resourceType } = req.query;
+            
+            try {
+                let query = 'SELECT * FROM audit_logs WHERE 1=1';
+                const params = [];
+                let paramIndex = 1;
+                
+                if (startDate) {
+                    query += ` AND timestamp >= $${paramIndex++}`;
+                    params.push(startDate);
+                }
+                
+                if (endDate) {
+                    query += ` AND timestamp <= $${paramIndex++}`;
+                    params.push(endDate);
+                }
+                
+                if (action) {
+                    query += ` AND action = $${paramIndex++}`;
+                    params.push(action);
+                }
+                
+                if (userId) {
+                    query += ` AND user_id = $${paramIndex++}`;
+                    params.push(userId);
+                }
+                
+                if (resourceType) {
+                    query += ` AND resource_type = $${paramIndex++}`;
+                    params.push(resourceType);
+                }
+                
+                query += ' ORDER BY timestamp DESC LIMIT 1000';
+                
+                const result = await pool.query(query, params);
+                res.json(result.rows);
+            } catch (error) {
+                res.status(500).json({ error: error.message });
+            }
+        });
+
+        // Election dashboard
+        async function loadActiveElections() {
+            try {
+                const response = await fetch('/api/elections/active');
+                const elections = await response.json();
+                
+                const electionsHTML = elections.map(election => `
+                    <div class="election-card">
+                        <h3>${election.title}</h3>
+                        <p>${election.description}</p>
+                        <div class="election-dates">
+                            <span>Start: ${new Date(election.start_date).toLocaleDateString()}</span>
+                            <span>End: ${new Date(election.end_date).toLocaleDateString()}</span>
+                        </div>
+                        <div class="election-status">
+                            <span class="status-badge ${election.status}">${election.status}</span>
+                        </div>
+                        <button onclick="viewElection('${election.election_id}')" class="btn">
+                            ${election.status === 'active' ? 'Vote Now' : 'View Details'}
+                        </button>
+                    </div>
+                `).join('');
+                
+                document.getElementById('electionsContainer').innerHTML = electionsHTML;
+            } catch (error) {
+                console.error('Error loading elections:', error);
+            }
+        }
+
+        // Ballot interface
+        async function loadBallot(electionId) {
+            try {
+                const response = await fetch(`/api/elections/${electionId}/ballot`);
+                const ballot = await response.json();
+                
+                const ballotHTML = ballot.items.map(item => `
+                    <div class="ballot-item">
+                        <h4>${item.question_text}</h4>
+                        <p class="item-instructions">
+                            ${item.item_type === 'single_choice' ? 'Select one option:' : 
+                              item.item_type === 'multiple_choice' ? `Select up to ${item.max_selections} options:` :
+                              'Rank your choices:'}
+                        </p>
+                        <div class="ballot-options">
+                            ${item.options.map(option => `
+                                <div class="ballot-option">
+                                    <input type="${item.item_type === 'multiple_choice' ? 'checkbox' : 'radio'}" 
+                                           name="item_${item.item_id}" 
+                                           value="${option.option_id}"
+                                           id="option_${option.option_id}">
+                                    <label for="option_${option.option_id}">
+                                        ${option.option_text}
+                                        ${option.candidate_name ? `<small>(${option.candidate_name})</small>` : ''}
+                                    </label>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `).join('');
+                
+                document.getElementById('ballotContainer').innerHTML = ballotHTML;
+            } catch (error) {
+                console.error('Error loading ballot:', error);
+            }
+        }
     </script>
 </body>
 </html>
