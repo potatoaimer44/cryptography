@@ -83,6 +83,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Secure E-Voting System - PKI Based</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         * {
             margin: 0;
@@ -846,10 +847,20 @@
                         <p><strong>Hash:</strong> <code>${entry.hash}</code></p>
                         <p><strong>Previous Hash:</strong> <code>${entry.previous_hash}</code></p>
                         <p><strong>Timestamp:</strong> ${new Date(entry.timestamp).toLocaleString()}</p>
-                        ${entry.data ? `<p><strong>Data:</strong> ${JSON.stringify(entry.data)}</p>` : ''}
+                        ${entry.type === 'RESULTS' && entry.data ?
+                            `<div><strong>Data:</strong><div style="width: 300px; height: 300px; margin: auto;"><canvas id="chart-${entry.block_id}"></canvas></div></div>` :
+                            (entry.data ? `<p><strong>Data:</strong> ${JSON.stringify(entry.data)}</p>` : '')}
                     </div>
                 `).join('');
                 document.getElementById('ledgerDisplay').innerHTML = ledgerHTML || '<p>No entries in the ledger.</p>';
+
+                // After setting HTML, render charts for RESULTS entries
+                ledger.forEach(entry => {
+                    if (entry.type === 'RESULTS' && entry.data) {
+                        renderPieChart(`chart-${entry.block_id}`, entry.data);
+                    }
+                });
+
             } catch (error) {
                 console.error('Ledger refresh error:', error);
                 showStatus('ledgerDisplay', `Error: ${error.message}`, 'error');
@@ -948,6 +959,84 @@
                 console.error('Blockchain verification error:', error);
                 showStatus('verificationResults', `Error: ${error.message}`, 'error');
             }
+        }
+
+        // Render Pie Chart for results
+        function renderPieChart(canvasId, resultData) {
+            const ctx = document.getElementById(canvasId);
+            if (!ctx) {
+                console.error('Canvas element not found for chart:', canvasId);
+                return;
+            }
+
+            let dataToParse = resultData;
+            // Check if resultData is a string and parse it
+            if (typeof resultData === 'string') {
+                try {
+                    dataToParse = JSON.parse(resultData);
+                } catch (e) {
+                    console.error('Error parsing result data for chart:', e);
+                    // Optionally display error or fallback content on the canvas
+                    const context = ctx.getContext('2d');
+                    context.font = '16px Arial';
+                    context.fillText('Error loading chart data.', 10, 50);
+                    return;
+                }
+            }
+
+            const labels = Object.keys(dataToParse);
+            const data = Object.values(dataToParse);
+
+            // Define a color palette for pie chart slices
+            const backgroundColors = [
+                'rgba(255, 99, 132, 0.7)',
+                'rgba(54, 162, 235, 0.7)',
+                'rgba(255, 206, 86, 0.7)',
+                'rgba(75, 192, 192, 0.7)',
+                'rgba(153, 102, 255, 0.7)',
+                'rgba(255, 159, 64, 0.7)',
+                'rgba(199, 199, 199, 0.7)',
+                'rgba(83, 102, 255, 0.7)',
+                'rgba(40, 159, 64, 0.7)',
+                'rgba(210, 99, 132, 0.7)'
+            ];
+
+            new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Election Results',
+                        data: data,
+                        backgroundColor: backgroundColors.slice(0, data.length),
+                        borderColor: backgroundColors.map(color => color.replace('0.7', '1')), // Make border solid
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false, // Allows custom width/height via parent div
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed !== null) {
+                                        label += context.parsed + ' vote(s)';
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
         }
 
         // Show status
