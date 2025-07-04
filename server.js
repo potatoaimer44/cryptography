@@ -6,10 +6,12 @@ const { Pool } = require('pg');
 const forge = require('node-forge');
 const crypto = require('crypto');
 const path = require('path');
+const multer = require('multer');
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json()); // For parsing application/json
+// Note: express.urlencoded({ extended: true }) would be needed if you were sending application/x-www-form-urlencoded
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/admin', express.static(path.join(__dirname, 'public/admin')));
 app.use('/voting', express.static(path.join(__dirname, 'public/voting')));
@@ -23,6 +25,37 @@ const pool = new Pool({
 });
 
 const JWT_SECRET = crypto.randomBytes(32).toString('hex');
+
+// Multer setup for file uploads
+const UPLOAD_PATH = 'uploads/citizenship_images/';
+const fs = require('fs');
+if (!fs.existsSync(UPLOAD_PATH)){
+    fs.mkdirSync(UPLOAD_PATH, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, UPLOAD_PATH);
+    },
+    filename: function (req, file, cb) {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+    }
+});
+
+const upload = multer({
+    storage: storage,
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB file size limit
+    fileFilter: function (req, file, cb) {
+        const filetypes = /jpeg|jpg|png|gif/;
+        const mimetype = filetypes.test(file.mimetype);
+        const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
+        if (mimetype && extname) {
+            return cb(null, true);
+        }
+        cb("Error: File upload only supports the following filetypes - " + filetypes);
+    }
+});
 
 const caKeyPair = forge.pki.rsa.generateKeyPair(2048);
 const caCert = forge.pki.createCertificate();
@@ -53,15 +86,18 @@ const authenticateAdmin = (req, res, next) => {
     });
 };
 
-app.post('/api/register', async (req, res) => {
+// Apply multer middleware for the 'citizenshipImage' field.
+app.post('/api/register', upload.single('citizenshipImage'), async (req, res) => {
     const { name, email, password, voterID, publicKey } = req.body;
+    const citizenshipImagePath = req.file ? req.file.path : null; // Get file path if uploaded
+
     try {
         const spkiDer = Buffer.from(publicKey, 'base64');
         const publicKeyPem = forge.pki.publicKeyToPem(forge.pki.publicKeyFromAsn1(forge.asn1.fromDer(spkiDer.toString('binary'))));
         const hashedPassword = await bcrypt.hash(password, 10);
         const result = await pool.query(
-            'INSERT INTO voters (name, email, password, voter_id, public_key, certificate_status, is_admin) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (voter_id) DO NOTHING RETURNING *',
-            [name, email, hashedPassword, voterID, publicKeyPem, 'pending', false]
+            'INSERT INTO voters (name, email, password, voter_id, public_key, certificate_status, is_admin, citizenship_image_path) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (voter_id) DO NOTHING RETURNING *',
+            [name, email, hashedPassword, voterID, publicKeyPem, 'pending', false, citizenshipImagePath]
         );
         if (result.rowCount === 0) return res.status(400).send('Voter ID or email already exists');
         res.status(201).send('Voter registered');
@@ -217,7 +253,7 @@ app.get('/api/admin/stats', authenticateAdmin, async (req, res) => {
 
 app.get('/api/admin/pending-certificates', authenticateAdmin, async (req, res) => {
     try {
-        const result = await pool.query('SELECT v.name, v.voter_id, cr.request_date FROM voters v JOIN certificate_requests cr ON v.voter_id = cr.voter_id WHERE cr.status = $1', ['pending']);
+        const result = await pool.query('SELECT v.name, v.voter_id, v.citizenship_image_path, cr.request_date FROM voters v JOIN certificate_requests cr ON v.voter_id = cr.voter_id WHERE cr.status = $1', ['pending']);
         res.json(result.rows);
     } catch (error) {
         res.status(500).send(error.message);
@@ -443,7 +479,8 @@ async function initializeDatabase() {
                 certificate TEXT,
                 has_voted BOOLEAN DEFAULT FALSE,
                 challenge TEXT,
-                is_admin BOOLEAN DEFAULT FALSE
+                is_admin BOOLEAN DEFAULT FALSE,
+                citizenship_image_path VARCHAR(255) NULL
             );
             CREATE TABLE IF NOT EXISTS certificate_requests (
                 voter_id VARCHAR(50) PRIMARY KEY REFERENCES voters(voter_id),

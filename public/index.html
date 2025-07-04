@@ -437,6 +437,10 @@
                             <option value="4096">RSA-4096 (Maximum Security)</option>
                         </select>
                     </div>
+                    <div class="form-group">
+                        <label for="citizenshipImage">Citizenship Card Image:</label>
+                        <input type="file" id="citizenshipImage" accept="image/*">
+                    </div>
                     <button class="btn" onclick="generateKeyPair()">Generate Key Pair</button>
                     <button class="btn btn-secondary" onclick="requestCertificate()">Request Certificate</button>
                 </div>
@@ -554,10 +558,23 @@
                 const publicKeyB64 = arrayBufferToBase64(publicKey);
                 const privateKeyB64 = arrayBufferToBase64(privateKeyExport);
 
+                // Prepare FormData
+                const formData = new FormData();
+                formData.append('name', name);
+                formData.append('email', email);
+                formData.append('password', password);
+                formData.append('voterID', voterID);
+                formData.append('publicKey', publicKeyB64);
+
+                const citizenshipImageFile = document.getElementById('citizenshipImage').files[0];
+                if (citizenshipImageFile) {
+                    formData.append('citizenshipImage', citizenshipImageFile);
+                }
+
                 const response = await fetch('/api/register', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, email, password, voterID, publicKey: publicKeyB64 })
+                    // headers: { 'Content-Type': 'application/json' }, // Do not set Content-Type, browser will set it for FormData
+                    body: formData
                 });
 
                 if (!response.ok) throw new Error(await response.text());
