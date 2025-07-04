@@ -294,6 +294,7 @@
         <div id="admin-main-content" style="display: none;">
             <div class="nav-tabs">
                 <button class="nav-tab active" onclick="showPanel('dashboard', event)">Dashboard & Certificates</button>
+                <button class="nav-tab" onclick="showPanel('documentVerificationPanel', event)">Document Verification</button>
                 <button class="nav-tab" onclick="showPanel('results', event)">Election Results</button>
             </div>
 
@@ -341,6 +342,28 @@
                 <button onclick="publishResults()">Publish Results</button>
                 <canvas id="results-pie-chart" style="max-width: 600px; margin: 20px auto 0;"></canvas>
                 <p id="results-feedback" style="display: none;"></p>
+            </div>
+
+            <div id="documentVerificationPanel" class="panel admin-card">
+                <h3>📄 Document Verification</h3>
+                <p>Review and verify uploaded user documents.</p>
+                <button onclick="loadPendingDocuments()">Load Pending Documents</button>
+                <div id="documentActionStatus" style="margin-top: 10px;"></div>
+                <div id="pendingDocumentsList" style="margin-top: 20px;">
+                    <!-- Pending documents will be listed here -->
+                </div>
+
+                <!-- Modal for verification notes (optional, can be simple prompt too) -->
+                <div id="verificationModal" style="display:none; position:fixed; left:0; top:0; width:100%; height:100%; background-color:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
+                    <div style="background:white; padding:20px; border-radius:10px; width:400px; box-shadow: 0 5px 15px rgba(0,0,0,0.3);">
+                        <h4>Verification Notes</h4>
+                        <textarea id="verificationNotes" rows="4" style="width:100%; margin-bottom:10px; padding:8px; border-radius:5px; border:1px solid #ccc;"></textarea>
+                        <input type="hidden" id="modalDocumentId">
+                        <input type="hidden" id="modalActionStatus">
+                        <button id="submitVerification" onclick="submitDocumentVerification()">Submit Verification</button>
+                        <button onclick="closeVerificationModal()">Cancel</button>
+                    </div>
+                </div>
             </div>
 
             <div style="text-align: center; margin-top: 20px;">
@@ -663,9 +686,114 @@
                 event.currentTarget.classList.add('active');
             } else {
                 // Activate the first tab by default if no event is passed
-                document.querySelector('.nav-tabs .nav-tab').classList.add('active');
+                const firstTab = document.querySelector('.nav-tabs .nav-tab');
+                if (firstTab) firstTab.classList.add('active');
+            }
+             // If a specific panel is requested (e.g. on page load with a hash)
+            if (panelId === 'documentVerificationPanel') {
+                loadPendingDocuments(); // Auto-load if this panel is shown
             }
         }
+
+        function showDocumentActionStatus(message, isError = false) {
+            const feedbackEl = document.getElementById('documentActionStatus');
+            feedbackEl.textContent = message;
+            feedbackEl.className = isError ? 'error' : 'success'; // Assuming you have .error and .success styles
+            feedbackEl.style.display = 'block';
+            setTimeout(() => { feedbackEl.style.display = 'none'; }, 5000);
+        }
+
+        async function loadPendingDocuments() {
+            if (!token) return;
+            try {
+                const response = await fetch(`${API_BASE}/admin/pending-documents`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!response.ok) throw new Error(`Failed to fetch: ${response.statusText}`);
+                const documents = await response.json();
+                const listEl = document.getElementById('pendingDocumentsList');
+                listEl.innerHTML = ''; // Clear previous list
+
+                if (documents.length === 0) {
+                    listEl.innerHTML = '<p>No pending documents for verification.</p>';
+                    return;
+                }
+
+                const table = document.createElement('table');
+                table.style.width = '100%';
+                table.innerHTML = `<thead><tr>
+                    <th>Voter Name</th><th>Email</th><th>Doc Type</th><th>Uploaded</th><th>File</th><th>Actions</th>
+                </tr></thead><tbody></tbody>`;
+                const tbody = table.querySelector('tbody');
+
+                documents.forEach(doc => {
+                    const row = tbody.insertRow();
+                    row.innerHTML = `
+                        <td>${doc.voter_name} (${doc.voter_id})</td>
+                        <td>${doc.voter_email}</td>
+                        <td>${doc.document_type}</td>
+                        <td>${new Date(doc.upload_date).toLocaleString()}</td>
+                        <td><a href="#" onclick="viewDocument(${doc.id}, '${doc.original_file_name || doc.file_name}'); return false;">${doc.original_file_name || doc.file_name}</a></td>
+                        <td>
+                            <button onclick="openVerificationModal(${doc.id}, 'approved')">Approve</button>
+                            <button onclick="openVerificationModal(${doc.id}, 'rejected')" style="background: #dc3545;">Reject</button>
+                        </td>
+                    `;
+                });
+                listEl.appendChild(table);
+            } catch (error) {
+                console.error('Error loading pending documents:', error);
+                showDocumentActionStatus(`Error loading documents: ${error.message}`, true);
+            }
+        }
+
+        function viewDocument(documentId, fileName) {
+            // Construct URL to the document file endpoint
+            // The backend will handle serving the file with appropriate headers
+            const documentUrl = `${API_BASE}/admin/document-file/${documentId}`;
+            // Open in a new tab
+            window.open(documentUrl, '_blank');
+        }
+
+        function openVerificationModal(documentId, actionStatus) {
+            document.getElementById('modalDocumentId').value = documentId;
+            document.getElementById('modalActionStatus').value = actionStatus;
+            document.getElementById('verificationNotes').value = ''; // Clear previous notes
+            document.getElementById('verificationModal').style.display = 'flex'; // Use flex for centering
+        }
+
+        function closeVerificationModal() {
+            document.getElementById('verificationModal').style.display = 'none';
+        }
+
+        async function submitDocumentVerification() {
+            if (!token) return;
+            const documentId = document.getElementById('modalDocumentId').value;
+            const status = document.getElementById('modalActionStatus').value;
+            const verificationNotes = document.getElementById('verificationNotes').value;
+
+            try {
+                const response = await fetch(`${API_BASE}/admin/verify-document`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ documentId: parseInt(documentId), status, verificationNotes })
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.message || 'Failed to verify document.');
+
+                showDocumentActionStatus(data.message || `Document ${status} successfully.`, false);
+                closeVerificationModal();
+                loadPendingDocuments(); // Refresh the list
+            } catch (error) {
+                console.error('Error submitting document verification:', error);
+                showDocumentActionStatus(`Error: ${error.message}`, true);
+                // Don't close modal on error, so user can retry or see notes.
+            }
+        }
+
     </script>
 </body>
 </html>
