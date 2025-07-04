@@ -399,7 +399,7 @@
 
         <div class="nav-tabs">
             <button class="nav-tab active" onclick="showPanel('registration')">Registration</button>
-            <button class="nav-tab" onclick="showPanel('voting')">Voting</button>
+            <button class="nav-tab" onclick="window.location.href='/voting'">Voting</button>
             <button class="nav-tab" onclick="window.location.href='/admin'">Admin Panel</button>
             <button class="nav-tab" onclick="showPanel('ledger')">Public Ledger</button>
             <button class="nav-tab" onclick="showPanel('verification')">Verification</button>
@@ -448,67 +448,7 @@
             </div>
         </div>
 
-        <!-- Voting Panel -->
-        <div id="voting" class="panel">
-            <h2>🗳️ Cast Your Vote</h2>
-            
-            <div id="authSection">
-                <h3>Authentication Required</h3>
-                <div class="form-group">
-                    <label for="voterEmailAuth">Email:</label>
-                    <input type="email" id="voterEmailAuth" placeholder="Your registered email">
-                </div>
-                <div class="form-group">
-                    <label for="voterPasswordAuth">Password:</label>
-                    <input type="password" id="voterPasswordAuth" placeholder="Your password">
-                </div>
-                <div class="form-group">
-                    <label for="privateKeyAuth">Private Key (for signing):</label>
-                    <input type="file" id="privateKeyFile" accept=".key,.txt,.pem" onchange="loadPrivateKeyFromFile()" style="margin-bottom: 10px;">
-                    <small style="display: block; margin-bottom: 10px; color: #666;">Or paste your private key below:</small>
-                    <textarea id="privateKeyAuth" rows="3" placeholder="Paste your private key here"></textarea>
-                </div>
-                <button class="btn" onclick="authenticateVoter()">Authenticate</button>
-                <div id="authStatus"></div>
-            </div>
-
-            <div id="ballotSection" style="display: none;">
-                <h3>2025 Presidential Election Ballot</h3>
-                <p><strong>Instructions:</strong> Select one candidate. Your vote will be encrypted and anonymized.</p>
-                
-                <div id="ballotOptions">
-                    <div class="ballot-option" role="radio" aria-checked="false" tabindex="0" onclick="selectCandidate('candidate1')">
-                        <input type="radio" name="vote" value="candidate1" id="vote1" aria-labelledby="candidate1-label">
-                        <div id="candidate1-label">
-                            <strong>Prachanda</strong><br>
-                            <small>Communist Party of Nepal</small>
-                        </div>
-                    </div>
-                    
-                    <div class="ballot-option" role="radio" aria-checked="false" tabindex="0" onclick="selectCandidate('candidate2')">
-                        <input type="radio" name="vote" value="candidate2" id="vote2" aria-labelledby="candidate2-label">
-                        <div id="candidate2-label">
-                            <strong>Sher Bahadaur Deuba</strong><br>
-                            <small>Nepal Congress</small>
-                        </div>
-                    </div>
-                    
-                    <div class="ballot-option" role="radio" aria-checked="false" tabindex="0" onclick="selectCandidate('candidate3')">
-                        <input type="radio" name="vote" value="candidate3" id="vote3" aria-labelledby="candidate3-label">
-                        <div id="candidate3-label">
-                            <strong>Rabi Lamichhane</strong><br>
-                            <small>Rastriya Swatantra Party</small>
-                        </div>
-                    </div>
-                </div>
-                
-                <button class="btn btn-success" onclick="castVote()">Cast Vote</button>
-                <button class="btn btn-secondary" onclick="clearVote()">Clear Selection</button>
-                
-                <div id="voteStatus"></div>
-                <div id="voteReceipt"></div>
-            </div>
-        </div>
+        <!-- Voting Panel has been moved to /voting/index.html -->
 
         <!-- Public Ledger Panel -->
         <div id="ledger" class="panel">
