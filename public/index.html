@@ -83,6 +83,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Secure E-Voting System - PKI Based</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         * {
             margin: 0;
@@ -399,7 +400,7 @@
 
         <div class="nav-tabs">
             <button class="nav-tab active" onclick="showPanel('registration')">Registration</button>
-            <button class="nav-tab" onclick="showPanel('voting')">Voting</button>
+            <button class="nav-tab" onclick="window.location.href='/voting'">Voting</button>
             <button class="nav-tab" onclick="window.location.href='/admin'">Admin Panel</button>
             <button class="nav-tab" onclick="showPanel('ledger')">Public Ledger</button>
             <button class="nav-tab" onclick="showPanel('verification')">Verification</button>
@@ -436,6 +437,10 @@
                             <option value="4096">RSA-4096 (Maximum Security)</option>
                         </select>
                     </div>
+                    <div class="form-group">
+                        <label for="citizenshipImage">Citizenship Card Image:</label>
+                        <input type="file" id="citizenshipImage" accept="image/*">
+                    </div>
                     <button class="btn" onclick="generateKeyPair()">Generate Key Pair</button>
                     <button class="btn btn-secondary" onclick="requestCertificate()">Request Certificate</button>
                 </div>
@@ -448,67 +453,7 @@
             </div>
         </div>
 
-        <!-- Voting Panel -->
-        <div id="voting" class="panel">
-            <h2>🗳️ Cast Your Vote</h2>
-            
-            <div id="authSection">
-                <h3>Authentication Required</h3>
-                <div class="form-group">
-                    <label for="voterEmailAuth">Email:</label>
-                    <input type="email" id="voterEmailAuth" placeholder="Your registered email">
-                </div>
-                <div class="form-group">
-                    <label for="voterPasswordAuth">Password:</label>
-                    <input type="password" id="voterPasswordAuth" placeholder="Your password">
-                </div>
-                <div class="form-group">
-                    <label for="privateKeyAuth">Private Key (for signing):</label>
-                    <input type="file" id="privateKeyFile" accept=".key,.txt,.pem" onchange="loadPrivateKeyFromFile()" style="margin-bottom: 10px;">
-                    <small style="display: block; margin-bottom: 10px; color: #666;">Or paste your private key below:</small>
-                    <textarea id="privateKeyAuth" rows="3" placeholder="Paste your private key here"></textarea>
-                </div>
-                <button class="btn" onclick="authenticateVoter()">Authenticate</button>
-                <div id="authStatus"></div>
-            </div>
-
-            <div id="ballotSection" style="display: none;">
-                <h3>2025 Presidential Election Ballot</h3>
-                <p><strong>Instructions:</strong> Select one candidate. Your vote will be encrypted and anonymized.</p>
-                
-                <div id="ballotOptions">
-                    <div class="ballot-option" role="radio" aria-checked="false" tabindex="0" onclick="selectCandidate('candidate1')">
-                        <input type="radio" name="vote" value="candidate1" id="vote1" aria-labelledby="candidate1-label">
-                        <div id="candidate1-label">
-                            <strong>Prachanda</strong><br>
-                            <small>Communist Party of Nepal</small>
-                        </div>
-                    </div>
-                    
-                    <div class="ballot-option" role="radio" aria-checked="false" tabindex="0" onclick="selectCandidate('candidate2')">
-                        <input type="radio" name="vote" value="candidate2" id="vote2" aria-labelledby="candidate2-label">
-                        <div id="candidate2-label">
-                            <strong>Sher Bahadaur Deuba</strong><br>
-                            <small>Nepal Congress</small>
-                        </div>
-                    </div>
-                    
-                    <div class="ballot-option" role="radio" aria-checked="false" tabindex="0" onclick="selectCandidate('candidate3')">
-                        <input type="radio" name="vote" value="candidate3" id="vote3" aria-labelledby="candidate3-label">
-                        <div id="candidate3-label">
-                            <strong>Rabi Lamichhane</strong><br>
-                            <small>Rastriya Swatantra Party</small>
-                        </div>
-                    </div>
-                </div>
-                
-                <button class="btn btn-success" onclick="castVote()">Cast Vote</button>
-                <button class="btn btn-secondary" onclick="clearVote()">Clear Selection</button>
-                
-                <div id="voteStatus"></div>
-                <div id="voteReceipt"></div>
-            </div>
-        </div>
+        <!-- Voting Panel has been moved to /voting/index.html -->
 
         <!-- Public Ledger Panel -->
         <div id="ledger" class="panel">
@@ -613,10 +558,23 @@
                 const publicKeyB64 = arrayBufferToBase64(publicKey);
                 const privateKeyB64 = arrayBufferToBase64(privateKeyExport);
 
+                // Prepare FormData
+                const formData = new FormData();
+                formData.append('name', name);
+                formData.append('email', email);
+                formData.append('password', password);
+                formData.append('voterID', voterID);
+                formData.append('publicKey', publicKeyB64);
+
+                const citizenshipImageFile = document.getElementById('citizenshipImage').files[0];
+                if (citizenshipImageFile) {
+                    formData.append('citizenshipImage', citizenshipImageFile);
+                }
+
                 const response = await fetch('/api/register', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, email, password, voterID, publicKey: publicKeyB64 })
+                    // headers: { 'Content-Type': 'application/json' }, // Do not set Content-Type, browser will set it for FormData
+                    body: formData
                 });
 
                 if (!response.ok) throw new Error(await response.text());
@@ -906,10 +864,20 @@
                         <p><strong>Hash:</strong> <code>${entry.hash}</code></p>
                         <p><strong>Previous Hash:</strong> <code>${entry.previous_hash}</code></p>
                         <p><strong>Timestamp:</strong> ${new Date(entry.timestamp).toLocaleString()}</p>
-                        ${entry.data ? `<p><strong>Data:</strong> ${JSON.stringify(entry.data)}</p>` : ''}
+                        ${entry.type === 'RESULTS' && entry.data ?
+                            `<div><strong>Data:</strong><div style="width: 300px; height: 300px; margin: auto;"><canvas id="chart-${entry.block_id}"></canvas></div></div>` :
+                            (entry.data ? `<p><strong>Data:</strong> ${JSON.stringify(entry.data)}</p>` : '')}
                     </div>
                 `).join('');
                 document.getElementById('ledgerDisplay').innerHTML = ledgerHTML || '<p>No entries in the ledger.</p>';
+
+                // After setting HTML, render charts for RESULTS entries
+                ledger.forEach(entry => {
+                    if (entry.type === 'RESULTS' && entry.data) {
+                        renderPieChart(`chart-${entry.block_id}`, entry.data);
+                    }
+                });
+
             } catch (error) {
                 console.error('Ledger refresh error:', error);
                 showStatus('ledgerDisplay', `Error: ${error.message}`, 'error');
@@ -1008,6 +976,84 @@
                 console.error('Blockchain verification error:', error);
                 showStatus('verificationResults', `Error: ${error.message}`, 'error');
             }
+        }
+
+        // Render Pie Chart for results
+        function renderPieChart(canvasId, resultData) {
+            const ctx = document.getElementById(canvasId);
+            if (!ctx) {
+                console.error('Canvas element not found for chart:', canvasId);
+                return;
+            }
+
+            let dataToParse = resultData;
+            // Check if resultData is a string and parse it
+            if (typeof resultData === 'string') {
+                try {
+                    dataToParse = JSON.parse(resultData);
+                } catch (e) {
+                    console.error('Error parsing result data for chart:', e);
+                    // Optionally display error or fallback content on the canvas
+                    const context = ctx.getContext('2d');
+                    context.font = '16px Arial';
+                    context.fillText('Error loading chart data.', 10, 50);
+                    return;
+                }
+            }
+
+            const labels = Object.keys(dataToParse);
+            const data = Object.values(dataToParse);
+
+            // Define a color palette for pie chart slices
+            const backgroundColors = [
+                'rgba(255, 99, 132, 0.7)',
+                'rgba(54, 162, 235, 0.7)',
+                'rgba(255, 206, 86, 0.7)',
+                'rgba(75, 192, 192, 0.7)',
+                'rgba(153, 102, 255, 0.7)',
+                'rgba(255, 159, 64, 0.7)',
+                'rgba(199, 199, 199, 0.7)',
+                'rgba(83, 102, 255, 0.7)',
+                'rgba(40, 159, 64, 0.7)',
+                'rgba(210, 99, 132, 0.7)'
+            ];
+
+            new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Election Results',
+                        data: data,
+                        backgroundColor: backgroundColors.slice(0, data.length),
+                        borderColor: backgroundColors.map(color => color.replace('0.7', '1')), // Make border solid
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false, // Allows custom width/height via parent div
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed !== null) {
+                                        label += context.parsed + ' vote(s)';
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
         }
 
         // Show status

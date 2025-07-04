@@ -199,10 +199,20 @@
             background: #f8f9fa;
             margin-bottom: 7px;
             border-radius: 8px;
-            display: flex;
-            align-items: center;
+            /* display: flex; // Modified to allow block elements like div for image
+            align-items: center; */
             gap: 10px;
             border: 1px solid #e1e5e9;
+        }
+        ul#pending-certificates input[type="checkbox"] {
+            margin-right: 10px; /* Add some space next to checkbox */
+        }
+        .citizenship-image-admin {
+            max-width: 100px;
+            max-height: 100px;
+            border-radius: 4px;
+            margin-top: 5px;
+            display: block; /* Or inline-block if preferred next to text */
         }
         ul#pending-certificates input[type="checkbox"] {
             cursor: pointer;
