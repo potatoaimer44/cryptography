@@ -6,8 +6,6 @@ const { Pool } = require('pg');
 const forge = require('node-forge');
 const crypto = require('crypto');
 const path = require('path');
-const fs = require('fs'); // For directory creation
-const multer = require('multer'); // For file uploads
 
 const app = express();
 app.use(cors());
@@ -54,162 +52,6 @@ const authenticateAdmin = (req, res, next) => {
     });
 };
 
-// --- Multer Configuration for Document Uploads ---
-const userDocumentStorage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        // Documents will be stored in a subfolder named after the voterID
-        // voterID should be available from the authenticateToken middleware
-        const voterID = req.user ? req.user.voterID : null;
-        if (!voterID) {
-            return cb(new Error('Voter ID not found for upload destination.'), null);
-        }
-        const dir = path.join(__dirname, 'uploads/user_documents', voterID);
-        // Create directory if it doesn't exist
-        fs.mkdirSync(dir, { recursive: true });
-        cb(null, dir);
-    },
-    filename: (req, file, cb) => {
-        // Sanitize documentType from body, default to 'other_document'
-        const documentType = req.body.documentType ? req.body.documentType.replace(/[^a-z0-9_]/gi, '_') : 'other_document';
-        const timestamp = Date.now();
-        // Original extension
-        const extension = path.extname(file.originalname);
-        // New filename: voterID_documentType_timestamp.ext
-        const voterID = req.user ? req.user.voterID : 'unknownVoter';
-        cb(null, `${voterID}_${documentType}_${timestamp}${extension}`);
-    }
-});
-
-// Admin: Get a specific document file for viewing
-app.get('/api/admin/document-file/:documentId', authenticateAdmin, async (req, res) => {
-    try {
-        const { documentId } = req.params;
-        const docResult = await pool.query(
-            'SELECT file_path, file_name, mime_type FROM user_documents WHERE id = $1',
-            [documentId]
-        );
-
-        if (docResult.rows.length === 0) {
-            return res.status(404).send('Document not found.');
-        }
-
-        const document = docResult.rows[0];
-        const absoluteFilePath = path.resolve(document.file_path); // multer stores absolute path or path relative to project root. Resolve ensures it's absolute.
-
-        // Check if file exists
-        if (!fs.existsSync(absoluteFilePath)) {
-            console.error(`File not found at path: ${absoluteFilePath} for document ID: ${documentId}`);
-            return res.status(404).send('File not found on server.');
-        }
-
-        // Set appropriate headers for inline display or download
-        // For inline display of PDFs/images:
-        res.setHeader('Content-Type', document.mime_type || 'application/octet-stream');
-        // res.setHeader('Content-Disposition', `inline; filename="${document.original_file_name || document.file_name}"`);
-
-        // Forcing download:
-        // res.setHeader('Content-Disposition', `attachment; filename="${document.original_file_name || document.file_name}"`);
-
-        res.sendFile(absoluteFilePath, (err) => {
-            if (err) {
-                console.error('Error sending file:', err);
-                // Avoid sending another response if headers already sent
-                if (!res.headersSent) {
-                    res.status(500).send('Error serving the document.');
-                }
-            }
-        });
-
-    } catch (error) {
-        console.error('Error retrieving document file:', error);
-        if (!res.headersSent) {
-            res.status(500).send('Server error while retrieving document.');
-        }
-    }
-});
-
-// Admin: Verify (Approve/Reject) a Document
-app.post('/api/admin/verify-document', authenticateAdmin, async (req, res) => {
-    const { documentId, status, verificationNotes } = req.body; // status should be 'approved' or 'rejected'
-    const adminVoterId = req.user.voterID; // Admin who is performing the action
-
-    if (!documentId || !status || !['approved', 'rejected'].includes(status)) {
-        return res.status(400).json({ message: 'Document ID and a valid status (approved/rejected) are required.' });
-    }
-
-    try {
-        const docResult = await pool.query('SELECT * FROM user_documents WHERE id = $1', [documentId]);
-        if (docResult.rows.length === 0) {
-            return res.status(404).json({ message: 'Document not found.' });
-        }
-        // Optional: Check if document is already verified
-        // if (docResult.rows[0].verification_status !== 'pending') {
-        //     return res.status(400).json({ message: `Document is already ${docResult.rows[0].verification_status}.` });
-        // }
-
-        await pool.query(
-            `UPDATE user_documents
-             SET verification_status = $1, verification_notes = $2, verified_by_admin_id = $3, verification_date = NOW()
-             WHERE id = $4`,
-            [status, verificationNotes || null, adminVoterId, documentId]
-        );
-
-        // Potentially, update voter's overall verification status or trigger other actions here
-        // For example, if all required documents are approved, mark voter as 'verified_identity' in 'voters' table.
-        // This depends on more complex application logic not yet defined.
-
-        res.status(200).json({ message: `Document ${documentId} has been ${status}.` });
-    } catch (error) {
-        console.error(`Error verifying document ${documentId}:`, error);
-        res.status(500).json({ message: 'Failed to update document verification status.' });
-    }
-});
-
-// Admin: Get Pending Documents for Verification
-app.get('/api/admin/pending-documents', authenticateAdmin, async (req, res) => {
-    try {
-        const result = await pool.query(`
-            SELECT
-                ud.id,
-                ud.voter_id,
-                v.name as voter_name,
-                v.email as voter_email,
-                ud.document_type,
-                ud.file_name,
-                ud.original_file_name,
-                ud.upload_date,
-                ud.verification_status
-            FROM user_documents ud
-            JOIN voters v ON ud.voter_id = v.voter_id
-            WHERE ud.verification_status = 'pending'
-            ORDER BY ud.upload_date ASC
-        `);
-        res.json(result.rows);
-    } catch (error) {
-        console.error('Error fetching pending documents:', error);
-        res.status(500).send(error.message);
-    }
-});
-
-const fileFilter = (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png|pdf/;
-    const mimetype = allowedTypes.test(file.mimetype);
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-
-    if (mimetype && extname) {
-        return cb(null, true);
-    }
-    cb(new Error('File type not supported. Only JPEG, PNG, and PDF are allowed.'), false);
-};
-
-const uploadUserDocument = multer({
-    storage: userDocumentStorage,
-    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB file size limit
-    fileFilter: fileFilter
-}).single('documentFile'); // 'documentFile' is the name attribute of the file input in the form
-
-// --- End Multer Configuration ---
-
 app.post('/api/register', async (req, res) => {
     const { name, email, password, voterID, publicKey } = req.body;
     try {
@@ -236,8 +78,8 @@ app.post('/api/login', async (req, res) => {
         const user = result.rows[0];
         const isValid = await bcrypt.compare(password, user.password);
         if (!isValid) return res.status(401).send('Invalid email or password');
-        const token = jwt.sign({ name: user.name, email: user.email, voterID: user.voter_id, is_admin: user.is_admin }, JWT_SECRET, { expiresIn: '1h' });
-        res.json({ token, voterID: user.voter_id, name: user.name, email: user.email });
+        const token = jwt.sign({ email: user.email, voterID: user.voter_id, is_admin: user.is_admin }, JWT_SECRET, { expiresIn: '1h' });
+        res.json({ token, voterID: user.voter_id });
     } catch (error) {
         res.status(500).send(error.message);
     }
@@ -510,66 +352,6 @@ app.post('/api/admin/publish-results', authenticateAdmin, async (req, res) => {
     }
 });
 
-// Endpoint for User Document Upload
-app.post('/api/user/upload-document', authenticateToken, (req, res) => {
-    uploadUserDocument(req, res, async (err) => {
-        if (err instanceof multer.MulterError) {
-            // A Multer error occurred when uploading.
-            console.error('Multer error:', err);
-            return res.status(400).json({ message: `File upload error: ${err.message}` });
-        } else if (err) {
-            // An unknown error occurred when uploading.
-            console.error('Unknown upload error:', err);
-            return res.status(500).json({ message: `File upload error: ${err.message}` });
-        }
-
-        // Everything went fine with multer, file is uploaded.
-        if (!req.file) {
-            return res.status(400).json({ message: 'No file uploaded.' });
-        }
-
-        const { voterID } = req.user; // From authenticateToken
-        const { documentType } = req.body;
-        const { path: filePath, filename: fileName, originalname: originalFileName, mimetype: mimeType } = req.file;
-
-
-        if (!documentType) {
-            // Should ideally be caught by client-side validation too
-            // If file uploaded but type missing, we might want to delete the orphaned file
-            fs.unlink(filePath, (unlinkErr) => {
-                if (unlinkErr) console.error("Error deleting orphaned file:", unlinkErr);
-            });
-            return res.status(400).json({ message: 'Document type is required.' });
-        }
-
-        try {
-            // Store document metadata in the database
-            const dbResult = await pool.query(
-                'INSERT INTO user_documents (voter_id, document_type, file_path, file_name, original_file_name, mime_type, verification_status) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
-                [voterID, documentType, filePath, fileName, originalFileName, mimeType, 'pending']
-            );
-
-            console.log(`Document metadata saved to DB for VoterID: ${voterID}, Type: ${documentType}, DB ID: ${dbResult.rows[0].id}`);
-
-            res.status(200).json({
-                message: 'Document uploaded successfully. Awaiting verification.',
-                filename: fileName,
-                docId: dbResult.rows[0].id
-                // filePath: `/uploads/user_documents/${voterID}/${fileName}` // Client doesn't strictly need this back
-            });
-
-        } catch (dbError) {
-            console.error('Database error after file upload:', dbError);
-            // Attempt to delete the uploaded file if DB operation fails
-            fs.unlink(filePath, (unlinkErr) => {
-                if (unlinkErr) console.error("Error deleting file after DB error:", unlinkErr);
-            });
-            res.status(500).json({ message: 'Failed to record document information.' });
-        }
-    });
-});
-
-
 app.get('/api/ledger', async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM ledger ORDER BY block_id');
@@ -683,21 +465,6 @@ async function initializeDatabase() {
                 hash TEXT NOT NULL,
                 previous_hash TEXT NOT NULL,
                 timestamp TIMESTAMP NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS user_documents (
-                id SERIAL PRIMARY KEY,
-                voter_id VARCHAR(50) REFERENCES voters(voter_id) ON DELETE CASCADE,
-                document_type VARCHAR(50) NOT NULL,
-                file_path TEXT NOT NULL,
-                file_name TEXT NOT NULL,
-                original_file_name TEXT,
-                mime_type VARCHAR(100),
-                upload_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                verification_status VARCHAR(20) NOT NULL DEFAULT 'pending', -- e.g., pending, approved, rejected
-                verified_by_admin_id VARCHAR(50) REFERENCES voters(voter_id) ON DELETE SET NULL, -- Assuming admins are also in voters table
-                verification_date TIMESTAMP,
-                verification_notes TEXT
             );
         `);
 
