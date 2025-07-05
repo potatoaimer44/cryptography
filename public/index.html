@@ -430,6 +430,10 @@
                         <input type="text" id="voterID" placeholder="Enter government issued ID">
                     </div>
                     <div class="form-group">
+                        <label for="citizenshipImage">Citizenship Image:</label>
+                        <input type="file" id="citizenshipImage" accept="image/*">
+                    </div>
+                    <div class="form-group">
                         <label for="keySize">Key Size:</label>
                         <select id="keySize">
                             <option value="2048">RSA-2048 (Recommended)</option>
@@ -531,9 +535,10 @@
             const password = document.getElementById('voterPassword').value;
             const voterID = document.getElementById('voterID').value;
             const keySize = parseInt(document.getElementById('keySize').value);
+            const citizenshipImageFile = document.getElementById('citizenshipImage').files[0];
 
-            if (!name || !email || !password || !voterID) {
-                showStatus('keyInfo', 'Please fill in all required fields.', 'error');
+            if (!name || !email || !password || !voterID || !citizenshipImageFile) {
+                showStatus('keyInfo', 'Please fill in all required fields and select a citizenship image.', 'error');
                 return;
             }
 
@@ -554,10 +559,17 @@
                 const publicKeyB64 = arrayBufferToBase64(publicKey);
                 const privateKeyB64 = arrayBufferToBase64(privateKeyExport);
 
+                const formData = new FormData();
+                formData.append('name', name);
+                formData.append('email', email);
+                formData.append('password', password);
+                formData.append('voterID', voterID);
+                formData.append('publicKey', publicKeyB64);
+                formData.append('citizenshipImage', citizenshipImageFile);
+
                 const response = await fetch('/api/register', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, email, password, voterID, publicKey: publicKeyB64 })
+                    body: formData // No 'Content-Type' header needed, browser sets it for FormData
                 });
 
                 if (!response.ok) throw new Error(await response.text());

@@ -462,7 +462,14 @@
                 list.innerHTML = '';
                 certificates.forEach(cert => {
                     const li = document.createElement('li');
-                    li.innerHTML = `<input type="checkbox" value="${cert.voter_id}"> ${cert.name} (Voter ID: ${cert.voter_id}, Requested: ${new Date(cert.request_date).toLocaleString()})`;
+                    li.innerHTML = `
+                        <input type="checkbox" value="${cert.voter_id}">
+                        ${cert.name} (Voter ID: ${cert.voter_id}, Requested: ${new Date(cert.request_date).toLocaleString()})
+                        ${cert.citizenship_image_path ? `<img src="/${cert.citizenship_image_path}" alt="Citizenship Image" style="max-width: 100px; max-height: 100px; margin-left: 10px;">` : ''}
+                        <button onclick="approveCitizenshipImage('${cert.voter_id}')">Approve Image</button>
+                        <button onclick="rejectCitizenshipImage('${cert.voter_id}')">Reject Image</button>
+                        (Status: ${cert.citizenship_image_status || 'N/A'})
+                    `;
                     list.appendChild(li);
                 });
             } catch (error) {
@@ -571,6 +578,60 @@
                 feedback.className = 'error';
                 feedback.style.display = 'block';
             }
+        }
+
+        async function approveCitizenshipImage(voterID) {
+            const feedback = document.getElementById('certificate-feedback');
+            try {
+                const response = await fetch(`${API_BASE}/admin/approve-citizenship-image`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ voterID })
+                });
+                if (response.ok) {
+                    feedback.textContent = `Citizenship image for ${voterID} approved.`;
+                    feedback.className = 'success';
+                    loadPendingCertificates(); // Refresh list
+                } else {
+                    const errorData = await response.text();
+                    feedback.textContent = `Error approving image: ${errorData}`;
+                    feedback.className = 'error';
+                }
+            } catch (error) {
+                feedback.textContent = 'Error approving citizenship image.';
+                feedback.className = 'error';
+            }
+            feedback.style.display = 'block';
+        }
+
+        async function rejectCitizenshipImage(voterID) {
+            const feedback = document.getElementById('certificate-feedback');
+            try {
+                const response = await fetch(`${API_BASE}/admin/reject-citizenship-image`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ voterID })
+                });
+                if (response.ok) {
+                    feedback.textContent = `Citizenship image for ${voterID} rejected.`;
+                    feedback.className = 'success';
+                    loadPendingCertificates(); // Refresh list
+                } else {
+                    const errorData = await response.text();
+                    feedback.textContent = `Error rejecting image: ${errorData}`;
+                    feedback.className = 'error';
+                }
+            } catch (error) {
+                feedback.textContent = 'Error rejecting citizenship image.';
+                feedback.className = 'error';
+            }
+            feedback.style.display = 'block';
         }
 
         let resultsPieChart = null;

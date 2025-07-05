@@ -6,13 +6,34 @@ const { Pool } = require('pg');
 const forge = require('node-forge');
 const crypto = require('crypto');
 const path = require('path');
+const multer = require('multer');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Multer setup for file uploads
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, 'uploads/citizenship_images/');
+    },
+    filename: function (req, file, cb) {
+        cb(null, Date.now() + '-' + file.originalname);
+    }
+});
+const upload = multer({ storage: storage });
+
+// Create uploads directory if it doesn't exist
+const fs = require('fs');
+const uploadDir = 'uploads/citizenship_images/';
+if (!fs.existsSync(uploadDir)){
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
+
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/admin', express.static(path.join(__dirname, 'public/admin')));
 app.use('/voting', express.static(path.join(__dirname, 'public/voting')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 const pool = new Pool({
     user: 'postgres',
@@ -53,20 +74,67 @@ const authenticateAdmin = (req, res, next) => {
     });
 };
 
-app.post('/api/register', async (req, res) => {
+app.post('/api/register', upload.single('citizenshipImage'), async (req, res) => {
     const { name, email, password, voterID, publicKey } = req.body;
+    const citizenshipImagePath = req.file ? req.file.path : null;
+
+    if (!citizenshipImagePath) {
+        return res.status(400).send('Citizenship image is required.');
+    }
+
     try {
         const spkiDer = Buffer.from(publicKey, 'base64');
         const publicKeyPem = forge.pki.publicKeyToPem(forge.pki.publicKeyFromAsn1(forge.asn1.fromDer(spkiDer.toString('binary'))));
         const hashedPassword = await bcrypt.hash(password, 10);
         const result = await pool.query(
-            'INSERT INTO voters (name, email, password, voter_id, public_key, certificate_status, is_admin) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (voter_id) DO NOTHING RETURNING *',
-            [name, email, hashedPassword, voterID, publicKeyPem, 'pending', false]
+            'INSERT INTO voters (name, email, password, voter_id, public_key, certificate_status, is_admin, citizenship_image_path, citizenship_image_status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT (voter_id) DO NOTHING RETURNING *',
+            [name, email, hashedPassword, voterID, publicKeyPem, 'pending', false, citizenshipImagePath, 'pending']
         );
-        if (result.rowCount === 0) return res.status(400).send('Voter ID or email already exists');
+        if (result.rowCount === 0) {
+            // If insert failed, remove the uploaded file
+            if (req.file) fs.unlinkSync(citizenshipImagePath);
+            return res.status(400).send('Voter ID or email already exists');
+        }
         res.status(201).send('Voter registered');
     } catch (error) {
         console.error('Registration error:', error);
+        res.status(500).send(error.message);
+    }
+});
+
+app.post('/api/admin/approve-citizenship-image', authenticateAdmin, async (req, res) => {
+    const { voterID } = req.body;
+    try {
+        const result = await pool.query(
+            "UPDATE voters SET citizenship_image_status = 'approved' WHERE voter_id = $1 AND is_admin = FALSE RETURNING *",
+            [voterID]
+        );
+        if (result.rowCount === 0) return res.status(404).send('Voter not found or already an admin.');
+        res.send('Citizenship image approved');
+    } catch (error) {
+        console.error('Citizenship image approval error:', error);
+        res.status(500).send(error.message);
+    }
+});
+
+app.post('/api/admin/reject-citizenship-image', authenticateAdmin, async (req, res) => {
+    const { voterID } = req.body;
+    try {
+        const result = await pool.query(
+            "UPDATE voters SET citizenship_image_status = 'rejected' WHERE voter_id = $1 AND is_admin = FALSE RETURNING *",
+            [voterID]
+        );
+        if (result.rowCount === 0) return res.status(404).send('Voter not found or already an admin.');
+        // Optionally, delete the image file from storage upon rejection
+        // const voter = result.rows[0];
+        // if (voter.citizenship_image_path) {
+        //     fs.unlink(path.join(__dirname, voter.citizenship_image_path), (err) => {
+        //         if (err) console.error('Error deleting rejected citizenship image:', err);
+        //     });
+        // }
+        res.send('Citizenship image rejected');
+    } catch (error) {
+        console.error('Citizenship image rejection error:', error);
         res.status(500).send(error.message);
     }
 });
@@ -217,7 +285,7 @@ app.get('/api/admin/stats', authenticateAdmin, async (req, res) => {
 
 app.get('/api/admin/pending-certificates', authenticateAdmin, async (req, res) => {
     try {
-        const result = await pool.query('SELECT v.name, v.voter_id, cr.request_date FROM voters v JOIN certificate_requests cr ON v.voter_id = cr.voter_id WHERE cr.status = $1', ['pending']);
+        const result = await pool.query('SELECT v.name, v.voter_id, v.citizenship_image_path, v.citizenship_image_status, cr.request_date FROM voters v JOIN certificate_requests cr ON v.voter_id = cr.voter_id WHERE cr.status = $1', ['pending']);
         res.json(result.rows);
     } catch (error) {
         res.status(500).send(error.message);
@@ -443,7 +511,9 @@ async function initializeDatabase() {
                 certificate TEXT,
                 has_voted BOOLEAN DEFAULT FALSE,
                 challenge TEXT,
-                is_admin BOOLEAN DEFAULT FALSE
+                is_admin BOOLEAN DEFAULT FALSE,
+                citizenship_image_path TEXT,
+                citizenship_image_status VARCHAR(20) DEFAULT 'pending'
             );
             CREATE TABLE IF NOT EXISTS certificate_requests (
                 voter_id VARCHAR(50) PRIMARY KEY REFERENCES voters(voter_id),
