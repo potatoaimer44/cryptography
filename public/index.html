@@ -430,8 +430,8 @@
                         <input type="text" id="voterID" placeholder="Enter government issued ID">
                     </div>
                     <div class="form-group">
-                        <label for="citizenshipImage">Citizenship Image:</label>
-                        <input type="file" id="citizenshipImage" accept="image/*">
+                        <label for="citizenshipImage">Citizenship Image (.jpg, .png only):</label>
+                        <input type="file" id="citizenshipImage" accept=".jpg, .jpeg, .png, image/jpeg, image/png">
                     </div>
                     <div class="form-group">
                         <label for="keySize">Key Size:</label>
@@ -537,8 +537,45 @@
             const keySize = parseInt(document.getElementById('keySize').value);
             const citizenshipImageFile = document.getElementById('citizenshipImage').files[0];
 
-            if (!name || !email || !password || !voterID || !citizenshipImageFile) {
-                showStatus('keyInfo', 'Please fill in all required fields and select a citizenship image.', 'error');
+            if (!name || !email || !password || !voterID) { // Removed citizenshipImageFile from this initial check
+                showStatus('keyInfo', 'Please fill in all text fields.', 'error');
+                return;
+            }
+            
+            if (!citizenshipImageFile) {
+                showStatus('keyInfo', 'Please select a citizenship image.', 'error');
+                return;
+            }
+
+            // Frontend File Type Validation for Citizenship Image
+            const allowedTypes = ['image/jpeg', 'image/png'];
+            const allowedExtensions = ['.jpg', '.jpeg', '.png'];
+            const fileName = citizenshipImageFile.name.toLowerCase();
+            const fileType = citizenshipImageFile.type; // Browser-provided MIME type
+
+            // A file is considered valid if its MIME type is in allowedTypes OR its extension is in allowedExtensions.
+            // This provides a reasonable check on the client side. The backend will perform stricter validation.
+            if (!(allowedTypes.includes(fileType) || allowedExtensions.some(ext => fileName.endsWith(ext)))) {
+                 showStatus('keyInfo', 'Invalid file type. Please select a JPG or PNG image.', 'error');
+                 return;
+            }
+
+
+            // Frontend Password Validation
+            if (password.length < 8) {
+                showStatus('keyInfo', 'Password must be at least 8 characters long.', 'error');
+                return;
+            }
+            if (!/[A-Z]/.test(password)) {
+                showStatus('keyInfo', 'Password must contain at least one uppercase letter.', 'error');
+                return;
+            }
+            if (!/[0-9]/.test(password)) {
+                showStatus('keyInfo', 'Password must contain at least one number.', 'error');
+                return;
+            }
+            if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]+/.test(password)) {
+                showStatus('keyInfo', 'Password must contain at least one special character.', 'error');
                 return;
             }
 

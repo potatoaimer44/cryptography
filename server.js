@@ -21,7 +21,18 @@ const storage = multer.diskStorage({
         cb(null, Date.now() + '-' + file.originalname);
     }
 });
-const upload = multer({ storage: storage });
+
+const imageFileFilter = (req, file, cb) => {
+    if (file.mimetype === 'image/jpeg' || file.mimetype === 'image/png') {
+        cb(null, true);
+    } else {
+        // Set a custom error on the request to be handled by the route
+        req.fileValidationError = 'Invalid file type. Only JPG and PNG images are allowed.';
+        cb(null, false); // Reject file
+    }
+};
+
+const upload = multer({ storage: storage, fileFilter: imageFileFilter });
 
 // Create uploads directory if it doesn't exist
 const fs = require('fs');
@@ -75,11 +86,38 @@ const authenticateAdmin = (req, res, next) => {
 };
 
 app.post('/api/register', upload.single('citizenshipImage'), async (req, res) => {
+    if (req.fileValidationError) {
+        return res.status(400).send(req.fileValidationError);
+    }
+
     const { name, email, password, voterID, publicKey } = req.body;
     const citizenshipImagePath = req.file ? req.file.path : null;
 
     if (!citizenshipImagePath) {
-        return res.status(400).send('Citizenship image is required.');
+        // This case implies file was rejected by filter or not provided.
+        // If fileValidationError is present, it's already handled.
+        // If no file was provided at all:
+        if (!req.fileValidationError) {
+            return res.status(400).send('Citizenship image is required.');
+        }
+    }
+
+    // Password validation
+    if (!password || password.length < 8) {
+        if (req.file) fs.unlinkSync(citizenshipImagePath); // Clean up uploaded file
+        return res.status(400).send('Password must be at least 8 characters long.');
+    }
+    if (!/[A-Z]/.test(password)) {
+        if (req.file) fs.unlinkSync(citizenshipImagePath); // Clean up uploaded file
+        return res.status(400).send('Password must contain at least one uppercase letter.');
+    }
+    if (!/[0-9]/.test(password)) {
+        if (req.file) fs.unlinkSync(citizenshipImagePath); // Clean up uploaded file
+        return res.status(400).send('Password must contain at least one number.');
+    }
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]+/.test(password)) {
+        if (req.file) fs.unlinkSync(citizenshipImagePath); // Clean up uploaded file
+        return res.status(400).send('Password must contain at least one special character.');
     }
 
     try {
