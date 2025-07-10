@@ -61,8 +61,8 @@ cryptography/
 
 ### Default Admin Account
 
-- **Email:** aayush@admin.com
-- **Password:** adminadmin
+- **Email:** "aayush@admin.com"
+- **Password:** "adminadmin"
 
 ## API Endpoints
 
