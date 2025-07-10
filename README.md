@@ -41,7 +41,8 @@ cryptography/
 ### Quick Start
 1. **Docker Image**
    ```
-   docker pull d4rkwanderer/e-voting
+   docker pull d4rkwanderer/secure_voting
+   docker run -p 3000:3000 d4rkwanderer/secure_voting
    ```
 ### Alrernative 
 1. **Clone the repository:**
