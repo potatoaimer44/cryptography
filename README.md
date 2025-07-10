@@ -117,6 +117,3 @@ cryptography/
 - Main entry: `server.js`
 - To run locally without Docker, ensure PostgreSQL is running and update DB config in `server.js`.
 
-## License
-
-ISC (see `package.json`) 
