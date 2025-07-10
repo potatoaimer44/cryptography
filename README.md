@@ -39,7 +39,11 @@ cryptography/
 - Docker & Docker Compose
 
 ### Quick Start
-
+1. **Docker Image**
+   ```
+   docker pull d4rkwanderer/e-voting
+   ```
+### Alrernative 
 1. **Clone the repository:**
    ```sh
    git clone <repo-url>
