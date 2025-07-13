@@ -1,10 +1,7 @@
-
 version: '3.8'
 services:
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: d4rkwanderer/e-voting
     ports:
       - "3000:3000"
     volumes:
@@ -14,7 +11,13 @@ services:
       db:
         condition: service_healthy
     environment:
-      - NODE_ENV=productio
+      - NODE_ENV=production
+      - DB_HOST=db
+      - DB_USER=postgres
+      - DB_PASSWORD=password
+      - DB_NAME=evoting
+      - DB_PORT=5432
+
   db:
     image: postgres:14
     environment:
@@ -30,5 +33,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+
 volumes:
   postgres_data:

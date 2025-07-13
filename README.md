@@ -37,16 +37,38 @@ cryptography/
 ### Prerequisites
 
 - Docker & Docker Compose
+- mkcert (for HTTPS setup)
 
-### Quick Start
-1. **Docker Image**
+### HTTPS Setup (Recommended)
+
+1. **Install mkcert:**
+   ```sh
+   # Ubuntu/Debian
+   sudo apt install mkcert
+   
+   # macOS
+   brew install mkcert
+   
+   # Windows
+   choco install mkcert
    ```
-   docker pull d4rkwanderer/e-voting
-   docker network create evoting-net
-   docker run --name db --network evoting-net -e POSTGRES_PASSWORD=password -e POSTGRES_DB=evoting -p 5432:5432 -d postgres:14
-   docker run -p 3000:3000 d4rkwanderer/secure_voting
+
+2. **Run the HTTPS setup script:**
+   ```sh
+   ./setup-https.sh
    ```
-### Alrernative 
+
+3. **Start the application:**
+   ```sh
+   docker-compose up --build
+   ```
+
+4. **Access the app (HTTPS):**
+   - Voter portal: [https://localhost:3000/voting/](https://localhost:3000/voting/)
+   - Admin portal: [https://localhost:3000/admin/](https://localhost:3000/admin/)
+
+### Alternative: HTTP Setup
+
 1. **Clone the repository:**
    ```sh
    git clone <repo-url>
@@ -58,7 +80,7 @@ cryptography/
    docker-compose up --build
    ```
 
-3. **Access the app:**
+3. **Access the app (HTTP):**
    - Voter portal: [http://localhost:3000/voting/](http://localhost:3000/voting/)
    - Admin portal: [http://localhost:3000/admin/](http://localhost:3000/admin/)
 
@@ -108,6 +130,7 @@ cryptography/
 
 ## Security
 
+- **HTTPS Support**: Secure communication using mkcert-generated certificates
 - Passwords hashed with bcrypt
 - JWT for session management
 - PKI for digital certificates and vote authentication

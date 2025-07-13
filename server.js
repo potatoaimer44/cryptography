@@ -7,6 +7,8 @@ const forge = require('node-forge');
 const crypto = require('crypto');
 const path = require('path');
 const multer = require('multer');
+const https = require('https');
+const fs = require('fs');
 
 const app = express();
 app.use(cors());
@@ -35,7 +37,6 @@ const imageFileFilter = (req, file, cb) => {
 const upload = multer({ storage: storage, fileFilter: imageFileFilter });
 
 // Create uploads directory if it doesn't exist
-const fs = require('fs');
 const uploadDir = 'uploads/citizenship_images/';
 if (!fs.existsSync(uploadDir)){
     fs.mkdirSync(uploadDir, { recursive: true });
@@ -46,12 +47,19 @@ app.use('/admin', express.static(path.join(__dirname, 'public/admin')));
 app.use('/voting', express.static(path.join(__dirname, 'public/voting')));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// Database configuration - works with both Docker and standalone
+const dbHost = process.env.DB_HOST || 'localhost';
+const dbUser = process.env.DB_USER || 'postgres';
+const dbPassword = process.env.DB_PASSWORD || 'password';
+const dbName = process.env.DB_NAME || 'evoting';
+const dbPort = process.env.DB_PORT || 5432;
+
 const pool = new Pool({
-    user: 'postgres',
-    host: 'db',
-    database: 'evoting',
-    password: 'password',
-    port: 5432
+    user: dbUser,
+    host: dbHost,
+    database: dbName,
+    password: dbPassword,
+    port: dbPort
 });
 
 const JWT_SECRET = crypto.randomBytes(32).toString('hex');
@@ -594,8 +602,35 @@ async function initializeDatabase() {
     }
 }
 
-initializeDatabase().then(() => {
-    app.listen(3000, () => {
-        console.log('Server running on port 3000');
+// Function to start the server
+function startServer() {
+    // HTTPS configuration
+    const options = {
+        key: fs.readFileSync('./localhost+2-key.pem'),
+        cert: fs.readFileSync('./localhost+2.pem')
+    };
+
+    https.createServer(options, app).listen(3000, () => {
+        console.log('HTTPS Server running on port 3000');
+        console.log('Access the application at: https://localhost:3000');
     });
-});
+}
+
+// Try to initialize database, but start server even if DB fails
+(async () => {
+    try {
+        await initializeDatabase();
+        console.log('✅ Database initialized successfully');
+    } catch (error) {
+        console.error('⚠️  Database initialization failed:', error.message);
+        console.log('💡 To run with full functionality:');
+        console.log('   - Use Docker: docker-compose up --build');
+        console.log('   - Or start PostgreSQL locally and set DB_HOST=localhost');
+        console.log('');
+        console.log('🚀 Starting HTTPS server without database...');
+        console.log('   Static files will be served, but API endpoints will not work');
+    }
+    
+    // Always start the server
+    startServer();
+})();
