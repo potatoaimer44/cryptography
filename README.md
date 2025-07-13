@@ -36,7 +36,7 @@ cryptography/
    docker pull d4rkwanderer/e-voting
    docker network create evoting-net
    docker run --name db --network evoting-net -e POSTGRES_PASSWORD=password -e POSTGRES_DB=evoting -p 5432:5432 -d postgres:14
-   docker run -p 3000:3000 d4rkwanderer/secure_voting
+   docker run --network evoting-net -p 3000:3000 d4rkwanderer/e-voting
 ```
 
 ## Setup & Installation
